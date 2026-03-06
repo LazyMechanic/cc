@@ -1,0 +1,8 @@
+{
+    "hostname": "vault_0",
+    "inventory_side": "back",
+    "redstone_side": "bottom",
+    "modem_side": "front",
+    "max_pulse_count": 5,
+    "last_pulse_delay": 3
+}

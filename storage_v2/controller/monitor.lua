@@ -7,12 +7,6 @@ local common = require("common")
 -- Configuration
 -- ################################################### --
 
-local UI_REFRESH_INTERVAL = 1
-local MONITOR_TEXT_SCALE = 0.5
-
-local MODEM_SIDE = "top"
-local INIT_TIMEOUT = 3
-
 local SCREEN_STORAGE_LIST = "storage_list"
 local SCREEN_STORAGE_DETAILS = "storage_details"
 
@@ -45,6 +39,13 @@ local COLOR_BUTTON_FG = colors.white
 -- ################################################### --
 
 local log
+local cfg = {
+    ui_refresh_interval = nil,
+    monitor_text_scale = nil,
+    modem_side = nil,
+    init_timeout = nil,
+    vaults = {},
+}
 local stock = {
     storages = {},
     buffer = nil,
@@ -171,7 +172,7 @@ local function setupDisplay()
     if found then
         display = mon
         is_monitor = true
-        display.setTextScale(MONITOR_TEXT_SCALE)
+        display.setTextScale(cfg.monitor_text_scale)
         log:info("using external monitor")
     else
         display = term.current()
@@ -681,7 +682,7 @@ local function render()
 end
 
 local function uiTask()
-    local refresh_timer = os.startTimer(UI_REFRESH_INTERVAL)
+    local refresh_timer = os.startTimer(cfg.ui_refresh_interval)
     
     -- Initial render
     markDirty()
@@ -692,7 +693,7 @@ local function uiTask()
         local event, p1, p2, p3 = os.pullEvent()
         
         if event == "timer" and p1 == refresh_timer then
-            refresh_timer = os.startTimer(UI_REFRESH_INTERVAL)
+            refresh_timer = os.startTimer(cfg.ui_refresh_interval)
         elseif event == "monitor_touch" or event == "mouse_click" then
             -- p1 = button (for mouse_click) or side (for monitor_touch)
             -- p2 = x, p3 = y
@@ -751,7 +752,7 @@ local function onVaultState(payload)
     local vault = readVaultState(payload)
 
     -- Init storage
-    local storage_name = common.VAULT_TO_STORAGE[vault.name]
+    local storage_name = cfg.vaults[vault.name]
     if not storage_name then
         log:error(("unexpected vault name '%s', storage not found"):format(vault.name))
         return
@@ -779,7 +780,7 @@ local function requestStoragesInitState()
 
     local responded_vaults = {}
     while true do
-        local src_id, msg = rednet.receive(common.VAULT_PROTOCOL, INIT_TIMEOUT)
+        local src_id, msg = rednet.receive(common.VAULT_PROTOCOL, cfg.init_timeout)
         if not src_id or not msg then
             break
         end
@@ -788,6 +789,7 @@ local function requestStoragesInitState()
         onVaultState(msg.payload)
     end
 
+    -- TO
     local responded_vaults_count = 0
     for key, _ in pairs(responded_vaults) do
         responded_vaults_count = responded_vaults_count + 1
@@ -846,7 +848,7 @@ local function requestBufferInitState()
     }
     rednet.broadcast(msg, common.BUFFER_PROTOCOL)
 
-    local src_id, msg = rednet.receive(common.BUFFER_PROTOCOL, INIT_TIMEOUT)
+    local src_id, msg = rednet.receive(common.BUFFER_PROTOCOL, cfg.init_timeout)
     if src_id or msg then
         onBufferState(msg.payload)
     else
@@ -867,33 +869,6 @@ local function bufferProcessingTask()
             log:info("buffer refreshed")
         end
     end
-end
-
--- ################################################### --
--- Argument Parsing
--- ################################################### --
-
-local function parseArgs()
-    local options = {
-        verbose = false,
-        scale = MONITOR_TEXT_SCALE,
-    }
-    
-    local i = 1
-    while i <= #arg do
-        local a = arg[i]
-        if a == "--verbose" or a == "-v" then
-            options.verbose = true
-        elseif a == "--scale" then
-            i = i + 1
-            if arg[i] then
-                options.scale = tonumber(arg[i]) or MONITOR_TEXT_SCALE
-            end
-        end
-        i = i + 1
-    end
-    
-    return options
 end
 
 -- ################################################### --
@@ -958,10 +933,10 @@ end
 -- ################################################### --
 
 local function initRednet()
-    if not rednet.isOpen(MODEM_SIDE) then
-        rednet.open(MODEM_SIDE)
+    if not rednet.isOpen(cfg.modem_side) then
+        rednet.open(cfg.modem_side)
     end
-    return rednet.isOpen(MODEM_SIDE)
+    return rednet.isOpen(cfg.modem_side)
 end
 
 local function init()
@@ -985,12 +960,56 @@ local function init()
 end
 
 -- ################################################### --
+-- Argument Parsing
+-- ################################################### --
+
+local function parseArgs()
+    local options = {
+        verbose = false,
+        config = "config.json",
+    }
+    
+    local i = 1
+    while i <= #arg do
+        local a = arg[i]
+        if a == "--verbose" or a == "-v" then
+            options.verbose = true
+        elseif a == "--config" or a == "-c" then
+            i = i + 1
+            if arg[i] then
+                options.config = arg[i]
+            end
+        end
+        i = i + 1
+    end
+    
+    return options
+end
+
+local function readConfig(path)
+    local f = fs.open(path, "r")
+    if not f then
+        log:error("failed to open config file:", path)
+        return nil
+    end
+    local content = f.readAll()
+    f.close()
+    
+    local obj, err = textutils.unserialiseJSON(content)
+    if not obj then
+        log:error("failed to deserialize config:", err)
+        return nil
+    end
+
+    return obj
+end
+
+-- ################################################### --
 -- Main
 -- ################################################### --
 
 local function main()
     local options = parseArgs()
-    MONITOR_TEXT_SCALE = options.scale
     
     -- Initialize logging
     common.initLogging({
@@ -998,6 +1017,9 @@ local function main()
         level = options.verbose and common.LogLevel.DEBUG or common.LogLevel.INFO,
         console = false,
     })
+
+    cfg = readConfig(options.config)
+    assert(cfg, "failed to parse config")
     
     log = common.getLogger("Monitor")
     log:info("starting monitor...")

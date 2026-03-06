@@ -1,172 +1,65 @@
-local common = require("common")
-
 -- ################################################### --
 -- Configuration
 -- ################################################### --
 
-local VAULT_NAME = "vault_"
+local ROOT_URL = "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2"
 
-local INVENTORY_SIDE = "back"
-local REDSTONE_SIDE = "bottom"
-local MODEM_SIDE = "front"
-
-local TRIGGER_COUNT = 5
-local TIMEOUT = 3
+local SCRIPT = "vault_relay.lua"
 
 -- ################################################### --
--- State
+-- Install
 -- ################################################### --
 
-local log = nil
-local timeout_timer = nil
-local pulse_count = 0
-local inv = nil
-
--- ################################################### --
--- Main logic
--- ################################################### --
-
-local function cancelTimeoutTimer()
-    if timeout_timer then
-        os.cancelTimer(timeout_timer)
-        timeout_timer = nil
-    end
-end
-
-local function resetPulseCount()
-    pulse_count = 0
-end
-
-local function resetState()
-    resetPulseCount()
-    cancelTimeoutTimer()
-end
-
-local function stateMessage()
-    return {
-        kind = "vault_state",
-        payload = {
-            source_name = VAULT_NAME,
-            items = inv.list(),
-            total_slots = inv.size(),
-        },
-    }
-end
-
-local function broadcastState()
-    rednet.broadcast(stateMessage(), common.VAULT_PROTOCOL)
-    log:info("broadcasted self state")
-    resetState()
-end
-
-local function sendState(dst_id)
-    rednet.send(dst_id, stateMessage(), common.VAULT_PROTOCOL)
-    log:info("sent self state to", dst_id)
-end
-
-local function onRedstoneSignal()
-    log:info("redstone enabled")
-    pulse_count = pulse_count + 1
-
-    if pulse_count >= TRIGGER_COUNT then
-        broadcastState()
+local function downloadFile(url, path)
+    print("Downloading " .. url .. " -> " .. path)
+    local request = http.get(url)
+    if request then
+        local file = fs.open(path, "w")
+        file.write(request.readAll())
+        file.close()
+        request.close()
     else
-        cancelTimeoutTimer()
-        timeout_timer = os.startTimer(TIMEOUT)
+        error("Failed to download " .. url)
     end
 end
 
-local function onTimerEvent()
-    log:info("timer event occurried")
-    if pulse_count > 0 then
-        broadcastState()
-    end
-    cancelTimeoutTimer()
-end
-
-local function onRednetMessage(src_id, msg)
-    log:info(("received '%s' message from %d computer"):format(msg.kind, src_id))
-    if msg.kind == "get_vault_state"
-    and (not msg.payload.target_name or (msg.payload.target_name and msg.payload.target_name == VAULT_NAME))
-    then
-        sendState(src_id)
-    end
-end
-
-local function onWakeup()
-    log:info("host", VAULT_NAME, "protocol", common.VAULT_PROTOCOL)
-    rednet.host(common.VAULT_PROTOCOL, VAULT_NAME)
-    broadcastState()
+local function installFirmware()
+    downloadFile(ROOT_URL .. "/shared/common.lua", "common.lua")
+    downloadFile(ROOT_URL .. "/vault_relay/vault_relay.lua", SCRIPT)
+    downloadFile(ROOT_URL .. "/vault_relay/example.config.lua", "example.config.lua")
 end
 
 -- ################################################### --
--- Argument Parsing
+-- Launch
 -- ################################################### --
 
-local function parseArgs()
-    local options = {
-        verbose = false,
-    }
-    
-    for _, a in ipairs(arg) do
-        if a == "--verbose" or a == "-v" then
-            options.verbose = true
-        end
+local function launch()
+    if multishell then
+        print("Launching with multishell...")
+        
+        local tab = shell.openTab(SCRIPT)
+        multishell.setTitle(tab, "Vault relay")
+        
+        multishell.setFocus(tab)
+        
+        print("Started!")
+        print("")
+        print("Use Ctrl+Tab to switch between tabs")
+    else
+        print("Press Ctrl+T to terminate")
+        sleep(1)
+        
+        shell.run("vault_relay")
     end
-    
-    return options
 end
 
-local function initRednet()
-    if not rednet.isOpen(MODEM_SIDE) then
-        rednet.open(MODEM_SIDE)
-    end
-    return rednet.isOpen(MODEM_SIDE)
-end
-
-local function initInventory()
-    return peripheral.wrap(INVENTORY_SIDE)
-end
+-- ################################################### --
+-- Main
+-- ################################################### --
 
 local function main()
-    local options = parseArgs()
-    
-    -- Initialize logging
-    common.initLogging({
-        filename = "logs/vault_relay.log",
-        level = options.verbose and common.LogLevel.DEBUG or common.LogLevel.INFO,
-        console = true,
-        timestamp = true,
-        append = false,
-    })
-
-    log = common.getLogger()
-    log:info("vault relay starting...")
-
-    assert(initRednet(), "modem not found")
-
-    inv = initInventory()
-    assert(inv, "inventory not found")
-
-    onWakeup()
-
-    while true do
-        local event, p1, p2, p3 = os.pullEvent()
-        
-        if event == "redstone" then
-            local is_on = redstone.getInput(REDSTONE_SIDE)
-            if is_on then
-                onRedstoneSignal()
-            end
-        elseif event == "timer" and p1 == timeout_timer then
-            onTimerEvent()
-        elseif event == "rednet_message" and p3 == common.VAULT_PROTOCOL then
-            local sender_id, message = p1, p2
-            if sender_id and message then
-                onRednetMessage(sender_id, message)
-            end
-        end
-    end
+    installFirmware()
+    launch()
 end
 
 -- ################################################### --
@@ -175,6 +68,5 @@ end
 
 local ok, err = pcall(main)
 if not ok then
-    log:error("fatal error occurried: " .. tostring(err))
+    printError("Fatal error occurried: " .. tostring(err))
 end
-common.shutdownLogging()
