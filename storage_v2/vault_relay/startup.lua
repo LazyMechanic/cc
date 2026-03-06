@@ -63,7 +63,7 @@ local function launch()
         parallel.waitForAny(
             function() shell.run(SCRIPT) end,
             function()
-                self_update.onUpdate()
+                self_update.waitRequest()
                 update_requested = true
             end
         )

@@ -66,7 +66,7 @@ local function launch()
             function() shell.run(STORAGE_SCRIPT) end,
             function() shell.run(MONITOR_SCRIPT) end,
             function()
-                self_update.onUpdate()
+                self_update.waitRequest()
                 update_requested = true
             end
         )
