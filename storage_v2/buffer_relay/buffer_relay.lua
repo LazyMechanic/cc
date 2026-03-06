@@ -220,6 +220,10 @@ end
 
 local ok, err = pcall(main)
 if not ok then
-    log:error("fatal error occurried: " .. tostring(err))
+    if log then
+        log:error("fatal error: " .. tostring(err))
+    else
+        printError("fatal error: " .. tostring(err))
+    end
 end
 common.shutdownLogging()

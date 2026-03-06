@@ -1,6 +1,7 @@
 -- monitor.lua
 -- Storage Monitor - Display UI
 
+local pp = require("cc.pretty")
 local common = require("common")
 
 -- ################################################### --
@@ -789,15 +790,7 @@ local function requestStoragesInitState()
         onVaultState(msg.payload)
     end
 
-    -- TO
-    local responded_vaults_count = 0
-    for key, _ in pairs(responded_vaults) do
-        responded_vaults_count = responded_vaults_count + 1
-    end
-
-    if responded_vaults_count < common.VAULT_COUNT then
-        log:warn("not all vaults responded")
-    end
+    log:info(("received initial state from next vaults: "):format(pp.render(pp.pretty(responded_vaults))))
 end
 
 local function storagesProcessingTask()
@@ -1041,6 +1034,10 @@ end
 
 local ok, err = pcall(main)
 if not ok then
-    printError("fatal error: " .. tostring(err))
+    if log then
+        log:error("fatal error: " .. tostring(err))
+    else
+        printError("fatal error: " .. tostring(err))
+    end
 end
 common.shutdownLogging()
