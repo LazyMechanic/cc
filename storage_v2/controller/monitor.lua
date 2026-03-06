@@ -1017,12 +1017,12 @@ local function main()
         level = options.verbose and common.LogLevel.DEBUG or common.LogLevel.INFO,
         console = false,
     })
-
-    cfg = readConfig(options.config)
-    assert(cfg, "failed to parse config")
     
     log = common.getLogger("Monitor")
     log:info("starting monitor...")
+
+    cfg = readConfig(options.config)
+    assert(cfg, "failed to parse config")
 
     if not init() then
         return
