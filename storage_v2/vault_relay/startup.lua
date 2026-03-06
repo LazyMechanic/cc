@@ -49,7 +49,7 @@ local function launch()
         print("Press Ctrl+T to terminate")
         sleep(1)
         
-        shell.run("vault_relay")
+        shell.run(SCRIPT)
     end
 end
 
