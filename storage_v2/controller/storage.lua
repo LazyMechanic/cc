@@ -260,7 +260,7 @@ local function initRednet()
             found = true
             if not rednet.isOpen(side) then
                 rednet.open(side)
-                print("Opened rednet on " .. side)
+                log:info("opened rednet on " .. side)
             end
         end
     end
@@ -271,11 +271,13 @@ end
 local function init()
     assert(initRednet())
 
+    log:info("initialize gates...")
     for storage_name, gate_name in pairs(cfg.storages) do
         local inv = peripheral.wrap(gate_name)
         assert(inv, "gate not found")
         gates[storage_name] = inv
     end
+    log:info("gates initialized")
 end
 
 -- ################################################### --
@@ -334,7 +336,7 @@ local function main()
     common.initLogging({
         filename = "logs/storage.log",
         level = options.verbose and common.LogLevel.DEBUG or common.LogLevel.INFO,
-        console = false,
+        console = true,
         timestamp = true,
         append = false,
     })
@@ -344,10 +346,8 @@ local function main()
 
     cfg = readConfig(options.config)
     assert(cfg, "failed to parse config")
-
-    if not init() then
-        return
-    end
+    
+    init()
 
     parallel.waitForAny(
         storagesProcessingTask,
