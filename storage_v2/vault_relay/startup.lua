@@ -1,3 +1,5 @@
+local args = {...}
+
 -- ################################################### --
 -- Configuration
 -- ################################################### --
@@ -58,8 +60,14 @@ end
 -- ################################################### --
 
 local function main()
-    installFirmware()
-    launch()
+    if args[1] == "--install" then
+        installFirmware()
+    elseif args[1] == "--launch" then
+        launch()
+    else
+        installFirmware()
+        launch()
+    end
 end
 
 -- ################################################### --
