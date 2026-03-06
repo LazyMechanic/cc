@@ -16,6 +16,7 @@ local cfg = {
 local timeout_timer = nil
 local pulse_count = 0
 local inv = nil
+local max_count_cache = {}
 
 -- ################################################### --
 -- Main logic
@@ -38,11 +39,22 @@ local function resetState()
 end
 
 local function stateMessage()
+    local items = inv.list()
+    for slot, item in pairs(items) do
+        if not max_count_cache[item.name] then
+            log:debug("item limit cache miss")
+            local detail = inv.getItemDetail(slot)
+            max_count_cache[item.name] = detail.maxCount
+        end
+
+        item.max_count = max_count_cache[item.name]
+    end
+
     return {
         kind = "vault_state",
         payload = {
             source_name = cfg.hostname,
-            items = inv.list(),
+            items = items,
             total_slots = inv.size(),
         },
     }

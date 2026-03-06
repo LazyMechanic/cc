@@ -45,6 +45,8 @@ local cfg = {
     monitor_text_scale = nil,
     init_timeout = nil,
     vaults = {},
+    storages = {},
+    gates = {},
 }
 local stock = {
     storages = {},
@@ -122,7 +124,11 @@ local function computeDisplayData()
             end
             
             -- Sort vaults by name
-            table.sort(vault_list, function(a, b) return a.name < b.name end)
+            table.sort(vault_list, function(a, b)
+                local na = tonumber(a.name:match("_(%d+)$")) or 0
+                local nb = tonumber(b.name:match("_(%d+)$")) or 0
+                return na < nb
+            end)
             
             total_slots = total_slots + storage_total
             total_occupied = total_occupied + storage_occupied
@@ -140,7 +146,11 @@ local function computeDisplayData()
     end
     
     -- Sort storages by name
-    table.sort(storage_list, function(a, b) return a.name < b.name end)
+    table.sort(storage_list, function(a, b)
+        local na = tonumber(a.name:match("_(%d+)$")) or 0
+        local nb = tonumber(b.name:match("_(%d+)$")) or 0
+        return na < nb
+    end)
     
     computed_data.storage_list = storage_list
     computed_data.total_slots = total_slots
@@ -789,7 +799,7 @@ local function requestStoragesInitState()
         onVaultState(msg.payload)
     end
 
-    log:info(("received initial state from next vaults: "):format(pp.render(pp.pretty(responded_vaults))))
+    log:info(("received initial state from next vaults: %s"):format(pp.render(pp.pretty(responded_vaults))))
 end
 
 local function storagesProcessingTask()
@@ -844,7 +854,7 @@ local function requestBufferInitState()
     if src_id or msg then
         onBufferState(msg.payload)
     else
-        log:warn("timeout occuried, no response from buffer")
+        log:warn("timeout occurried, no response from buffer")
     end
 end
 
@@ -1017,9 +1027,11 @@ local function main()
         filename = "logs/monitor.log",
         level = options.verbose and common.LogLevel.DEBUG or common.LogLevel.INFO,
         console = false,
+        timestamp = true,
+        append = false,
     })
     
-    log = common.getLogger("Monitor")
+    log = common.getLogger()
     log:info("starting monitor...")
 
     cfg = readConfig(options.config)

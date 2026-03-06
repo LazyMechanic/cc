@@ -2,6 +2,7 @@
     "ui_refresh_interval": 1,
     "monitor_text_scale": 0.5,
     "init_timeout": 3,
+    "buffer_inventory": "create:item_vault_174",
     "vaults": {
         "vault_0": "storage_0",
         "vault_1": "storage_0",
@@ -135,5 +136,29 @@
         "vault_129": "storage_21",
         "vault_130": "storage_21",
         "vault_131": "storage_21"
+    },
+    "storages": {
+        "storage_0": "create:item_vault_138",
+        "storage_1": "create:item_vault_139",
+        "storage_2": "create:item_vault_141",
+        "storage_3": "create:item_vault_143",
+        "storage_4": "create:item_vault_145",
+        "storage_5": "create:item_vault_147",
+        "storage_6": "create:item_vault_149",
+        "storage_7": "create:item_vault_151",
+        "storage_8": "create:item_vault_153",
+        "storage_9": "create:item_vault_155",
+        "storage_10": "create:item_vault_157",
+        "storage_11": "create:item_vault_135",
+        "storage_12": "create:item_vault_137",
+        "storage_13": "create:item_vault_159",
+        "storage_14": "create:item_vault_161",
+        "storage_15": "create:item_vault_163",
+        "storage_16": "create:item_vault_165",
+        "storage_17": "create:item_vault_167",
+        "storage_18": "create:item_vault_169",
+        "storage_19": "create:item_vault_171",
+        "storage_20": "create:item_vault_173",
+        "storage_21": "create:item_vault_134"
     }
 }

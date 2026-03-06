@@ -1,5 +1,4 @@
--- storage.lua
--- Storage System - Item Router
+local pp = require("cc.pretty")
 
 local common = require("common")
 
@@ -7,23 +6,32 @@ local common = require("common")
 -- Configure
 -- ################################################### --
 
+local NEW_ITEMS_EVENT = "new_items"
 
 -- ################################################### --
 -- State
 -- ################################################### --
+
+local log = nil
+local cfg = {
+    ui_refresh_interval = nil,
+    monitor_text_scale = nil,
+    init_timeout = nil,
+    buffer_inventory = nil,
+    vaults = {},
+    storages = {},
+}
 
 local stock = {
     storages = {},
     buffer = nil,
 }
 
-local log = nil
+local gates = {}
 
 -- ################################################### --
--- Main logic
+-- Storage Management
 -- ################################################### --
-
--- ##### Vault ##### --
 
 local function readVaultState(payload)
     -- Init vault
@@ -47,7 +55,12 @@ local function onVaultState(payload)
     local vault = readVaultState(payload)
 
     -- Init storage
-    local storage_name = common.VAULT_TO_STORAGE[vault.name]
+    local storage_name = cfg.vaults[vault.name]
+    if not storage_name then
+        log:error(("unexpected vault name '%s', storage not found"):format(vault.name))
+        return
+    end
+    
     local storage = stock.storages[storage_name]
     if not storage then
         storage = {
@@ -70,7 +83,7 @@ local function requestStoragesInitState()
 
     local responded_vaults = {}
     while true do
-        local src_id, msg = rednet.receive(common.VAULT_PROTOCOL, INIT_TIMEOUT)
+        local src_id, msg = rednet.receive(common.VAULT_PROTOCOL, cfg.init_timeout)
         if not src_id or not msg then
             break
         end
@@ -79,32 +92,29 @@ local function requestStoragesInitState()
         onVaultState(msg.payload)
     end
 
-    local responded_vaults_count = 0
-    for key, _ in pairs(responded_vaults) do
-        responded_vaults_count = responded_vaults_count + 1
-    end
-
-    if responded_vaults_count < common.VAULT_COUNT then
-        log:warn("not all vaults responded")
-    end
+    log:info(("received initial state from next vaults: %s"):format(pp.render(pp.pretty(responded_vaults))))
 end
 
 local function storagesProcessingTask()
     requestStoragesInitState()
-    markDirty()
 
     while true do
         local _, msg = rednet.receive(common.VAULT_PROTOCOL)
 
         if msg.kind == "vault_state" then
             onVaultState(msg.payload)
-            markDirty()
             log:info("storages refreshed")
         end
     end
 end
 
--- ##### Buffer ##### --
+-- ################################################### --
+-- Buffer Management
+-- ################################################### --
+
+local function notify()
+    os.queueEvent(NEW_ITEMS_EVENT)
+end
 
 local function readBufferState(payload)
     local buffer = {
@@ -135,14 +145,138 @@ local function requestBufferInitState()
     }
     rednet.broadcast(msg, common.BUFFER_PROTOCOL)
 
-    local src_id, msg = rednet.receive(common.BUFFER_PROTOCOL, INIT_TIMEOUT)
-    if src_id or msg then
-        onBufferState(msg.payload)
+    local src_id, response = rednet.receive(common.BUFFER_PROTOCOL, cfg.init_timeout)
+    if src_id and response then
+        onBufferState(response.payload)
+        notify()
     else
-        log:warn("timeout occuried, no response from buffer")
+        log:warn("timeout occurried, no response from buffer")
     end
 end
 
+local function bufferProcessingTask()
+    requestBufferInitState()
+
+    while true do
+        local _, msg = rednet.receive(common.BUFFER_PROTOCOL)
+
+        if msg.kind == "buffer_state" then
+            onBufferState(msg.payload)
+            notify()
+            log:info("buffer refreshed")
+        end
+    end
+end
+
+-- ################################################### --
+-- Items processing
+-- ################################################### --
+
+local function availableItemCount(storage, target_item)
+    local available = 0
+    for _, vault in pairs(storage.vaults) do
+        -- If vault can fit any amount of item (1 stack max)
+        if vault.occupied < vault.total then
+            log:debug("there is extra slots")
+            return target_item.count
+        end
+
+        for slot, item in pairs(vault.items) do
+            if target_item.name == item.name
+                and target_item.nbt == item.nbt
+            then
+                log:debug("vault", vault.name, "has identical items")
+
+                if item.max_count then
+                    local free = item.max_count - item.count
+                    available = available + free
+                    log:debug("item limit", item.max_count, "free", free, "available", available)
+                end
+            end
+
+            if available >= target_item.count then
+                log:debug("there is enough space in the storage", storage.name, "in vault", vault.name)
+                return target_item.count
+            end
+        end
+    end
+
+    return available
+end
+
+local function itemsProcessingTask()
+    while true do
+        local _ = os.pullEvent(NEW_ITEMS_EVENT)
+
+        log:info("new items arrived")
+
+        local ordered_storage_list = {}
+        for _, storage in pairs(stock.storages) do
+            table.insert(ordered_storage_list, storage)
+        end
+        table.sort(ordered_storage_list, function(a, b)
+            local na = tonumber(a.name:match("_(%d+)$")) or 0
+            local nb = tonumber(b.name:match("_(%d+)$")) or 0
+            return na < nb
+        end)
+
+        for slot, item in pairs(stock.buffer.items) do
+            log:info("moving", item.name, "x" .. item.count)
+
+            for _, storage in ipairs(ordered_storage_list) do
+                -- How much storage can fit this item
+                local can_fit = availableItemCount(storage, item)
+                log:debug("storage", storage.name, "can fit", can_fit, "items")
+
+                if can_fit > 0 then
+                    local moved = gates[storage.name].pullItems(cfg.buffer_inventory, slot, can_fit)
+                    log:info("  ->", storage.name, "x" .. moved)
+                    
+                    item.count = item.count - moved
+                    
+                    if item.count <= 0 then
+                        log:debug("done with item", item.name)
+                        break
+                    end
+                end
+            end
+
+            if item.count > 0 then
+                log:warn("no space for", item.count, "x", item.name)
+            end
+        end
+    end
+end
+
+-- ################################################### --
+-- Initialization
+-- ################################################### --
+
+local function initRednet()
+    local found = false
+    local sides = {"top","bottom","left","right","front","back"}
+    for _, side in ipairs(sides) do
+        if peripheral.getType(side) == "modem" then
+            found = true
+            if not rednet.isOpen(side) then
+                rednet.open(side)
+                print("Opened rednet on " .. side)
+            end
+        end
+    end
+
+    return found
+end
+
+local function init()
+    assert(initRednet())
+
+    for storage_name, gate_name in pairs(cfg.storages) do
+        local inv = peripheral.wrap(gate_name)
+        assert(inv, "gate not found")
+        gates[storage_name] = inv
+    end
+end
 
 -- ################################################### --
 -- Argument Parsing
@@ -151,16 +285,47 @@ end
 local function parseArgs()
     local options = {
         verbose = false,
+        config = "config.json",
     }
     
-    for _, a in ipairs(arg) do
+    local i = 1
+    while i <= #arg do
+        local a = arg[i]
         if a == "--verbose" or a == "-v" then
             options.verbose = true
+        elseif a == "--config" or a == "-c" then
+            i = i + 1
+            if arg[i] then
+                options.config = arg[i]
+            end
         end
+        i = i + 1
     end
     
     return options
 end
+
+local function readConfig(path)
+    local f = fs.open(path, "r")
+    if not f then
+        log:error("failed to open config file:", path)
+        return nil
+    end
+    local content = f.readAll()
+    f.close()
+    
+    local obj, err = textutils.unserialiseJSON(content)
+    if not obj then
+        log:error("failed to deserialize config:", err)
+        return nil
+    end
+
+    return obj
+end
+
+-- ################################################### --
+-- Main
+-- ################################################### --
 
 local function main()
     local options = parseArgs()
@@ -169,11 +334,26 @@ local function main()
     common.initLogging({
         filename = "logs/storage.log",
         level = options.verbose and common.LogLevel.DEBUG or common.LogLevel.INFO,
-        console = true,
+        console = false,
         timestamp = true,
         append = false,
     })
+    
+    log = common.getLogger()
+    log:info("starting storage system...")
 
+    cfg = readConfig(options.config)
+    assert(cfg, "failed to parse config")
+
+    if not init() then
+        return
+    end
+
+    parallel.waitForAny(
+        storagesProcessingTask,
+        bufferProcessingTask,
+        itemsProcessingTask
+    )
 end
 
 -- ################################################### --
