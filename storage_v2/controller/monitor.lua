@@ -824,7 +824,7 @@ end
 local function readBufferState(payload)
     local buffer = {
         name = payload.source_name,
-        total = payload.slots,
+        total = payload.total_slots,
         occupied = 0,
         item_count = 0,
         items = payload.items

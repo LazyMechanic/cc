@@ -12,7 +12,7 @@ Install vault relay firmware:
 wget run https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/install.lua --vault-relay
 ```
 
-Install controller firmware:
+Install buffer relay firmware:
 ```
 wget run https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/install.lua --buffer-relay
 ```
