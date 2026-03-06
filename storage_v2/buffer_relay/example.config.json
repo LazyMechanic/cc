@@ -2,7 +2,6 @@
     "hostname": "buffer_0",
     "inventory_side": "bottom",
     "redstone_side": [ "left", "right" ],
-    "modem_side": "back",
     "max_pulse_count": 5,
     "last_pulse_delay": 3
 }

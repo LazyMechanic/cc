@@ -1,3 +1,5 @@
+local self_update = require("self_update")
+
 local args = {...}
 
 -- ################################################### --
@@ -37,32 +39,45 @@ end
 -- Launch
 -- ################################################### --
 
+local function initRednet()
+    local found = false
+    local sides = {"top","bottom","left","right","front","back"}
+    for _, side in ipairs(sides) do
+        if peripheral.getType(side) == "modem" then
+            found = true
+            if not rednet.isOpen(side) then
+                rednet.open(side)
+                print("Opened rednet on " .. side)
+            end
+        end
+    end
+
+    return found
+end
+
 local function launch()
-    if multishell then
-        print("Launching with multishell...")
-        
-        local storage_tab = shell.openTab(STORAGE_SCRIPT)
-        multishell.setTitle(storage_tab, "Storage")
-        
-        local monitor_tab = shell.openTab(MONITOR_SCRIPT)
-        multishell.setTitle(monitor_tab, "Monitor")
-        
-        multishell.setFocus(monitor_tab)
-        
-        print("Started!")
-        print("  Tab " .. storage_tab .. ": Storage system")
-        print("  Tab " .. monitor_tab .. ": Monitor")
-        print("")
-        print("Use Ctrl+Tab to switch between tabs")
-    else
-        print("Launching with parallel...")
-        print("Press Ctrl+T to terminate")
-        sleep(1)
-        
+    print("Press Ctrl+T to terminate")
+    sleep(1)
+
+    initRednet()
+    while true do
+        local update_requested = false
         parallel.waitForAny(
             function() shell.run(STORAGE_SCRIPT) end,
-            function() shell.run(MONITOR_SCRIPT) end
+            function() shell.run(MONITOR_SCRIPT) end,
+            function()
+                self_update.onUpdate()
+                update_requested = true
+            end
         )
+
+        if update_requested then
+            print("Update requested")
+            installFirmware()
+        else
+            print("Shell finished")
+            break
+        end
     end
 end
 

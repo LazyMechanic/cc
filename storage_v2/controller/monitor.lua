@@ -43,7 +43,6 @@ local log
 local cfg = {
     ui_refresh_interval = nil,
     monitor_text_scale = nil,
-    modem_side = nil,
     init_timeout = nil,
     vaults = {},
 }
@@ -926,10 +925,19 @@ end
 -- ################################################### --
 
 local function initRednet()
-    if not rednet.isOpen(cfg.modem_side) then
-        rednet.open(cfg.modem_side)
+    local found = false
+    local sides = {"top","bottom","left","right","front","back"}
+    for _, side in ipairs(sides) do
+        if peripheral.getType(side) == "modem" then
+            found = true
+            if not rednet.isOpen(side) then
+                rednet.open(side)
+                print("Opened rednet on " .. side)
+            end
+        end
     end
-    return rednet.isOpen(cfg.modem_side)
+
+    return found
 end
 
 local function init()

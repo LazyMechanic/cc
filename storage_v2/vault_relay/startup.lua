@@ -1,3 +1,5 @@
+local self_update = require("self_update")
+
 local args = {...}
 
 -- ################################################### --
@@ -35,23 +37,44 @@ end
 -- Launch
 -- ################################################### --
 
+local function initRednet()
+    local found = false
+    local sides = {"top","bottom","left","right","front","back"}
+    for _, side in ipairs(sides) do
+        if peripheral.getType(side) == "modem" then
+            found = true
+            if not rednet.isOpen(side) then
+                rednet.open(side)
+                print("Opened rednet on " .. side)
+            end
+        end
+    end
+
+    return found
+end
+
 local function launch()
-    if multishell then
-        print("Launching with multishell...")
-        
-        local tab = shell.openTab(SCRIPT)
-        multishell.setTitle(tab, "Vault relay")
-        
-        multishell.setFocus(tab)
-        
-        print("Started!")
-        print("")
-        print("Use Ctrl+Tab to switch between tabs")
-    else
-        print("Press Ctrl+T to terminate")
-        sleep(1)
-        
-        shell.run(SCRIPT)
+    print("Press Ctrl+T to terminate")
+    sleep(1)
+    
+    initRednet()
+    while true do
+        local update_requested = false
+        parallel.waitForAny(
+            function() shell.run(SCRIPT) end,
+            function()
+                self_update.onUpdate()
+                update_requested = true
+            end
+        )
+
+        if update_requested then
+            print("Update requested")
+            installFirmware()
+        else
+            print("Shell finished")
+            break
+        end
     end
 end
 

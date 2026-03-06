@@ -1,7 +1,6 @@
 {
     "ui_refresh_interval": 1,
     "monitor_text_scale": 0.5,
-    "modem_side": "top",
     "init_timeout": 3,
     "vaults": {
         "vault_0": "storage_0",

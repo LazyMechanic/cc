@@ -9,7 +9,6 @@ local cfg = {
     hostname = nil,
     inventory_side = nil,
     redstone_side = nil,
-    modem_side = nil,
     max_pulse_count = nil,
     last_signal_delay = nil,
 }
@@ -90,10 +89,19 @@ local function onRednetMessage(src_id, msg)
 end
 
 local function initRednet()
-    if not rednet.isOpen(cfg.modem_side) then
-        rednet.open(cfg.modem_side)
+    local found = false
+    local sides = {"top","bottom","left","right","front","back"}
+    for _, side in ipairs(sides) do
+        if peripheral.getType(side) == "modem" then
+            found = true
+            if not rednet.isOpen(side) then
+                rednet.open(side)
+                print("Opened rednet on " .. side)
+            end
+        end
     end
-    return rednet.isOpen(cfg.modem_side)
+
+    return found
 end
 
 local function initInventory()
