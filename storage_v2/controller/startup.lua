@@ -28,7 +28,7 @@ local function installFirmware()
     downloadFile(ROOT_URL .. "/shared/common.lua", "common.lua")
     downloadFile(ROOT_URL .. "/controller/monitor.lua", MONITOR_SCRIPT)
     downloadFile(ROOT_URL .. "/controller/storage.lua", STORAGE_SCRIPT)
-    downloadFile(ROOT_URL .. "/controller/example.config.lua", "example.config.lua")
+    downloadFile(ROOT_URL .. "/controller/example.config.json", "example.config.json")
 end
 
 -- ################################################### --

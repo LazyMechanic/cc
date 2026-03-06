@@ -26,7 +26,7 @@ end
 local function installFirmware()
     downloadFile(ROOT_URL .. "/shared/common.lua", "common.lua")
     downloadFile(ROOT_URL .. "/buffer_relay/buffer_relay.lua", SCRIPT)
-    downloadFile(ROOT_URL .. "/buffer_relay/example.config.lua", "example.config.lua")
+    downloadFile(ROOT_URL .. "/buffer_relay/example.config.json", "example.config.json")
 end
 
 -- ################################################### --
