@@ -23,20 +23,20 @@ local function printHelp()
 end
 
 local function installController()
-    downloadFile(ROOT_URL .. "/controller/startup.lua", "startup.lua")
-    downloadFile(ROOT_URL .. "/shared/self_update.lua", "self_update.lua")
+    downloadFile(ROOT_URL .. "/self_update_startup.lua", "startup.lua")
+    downloadFile(ROOT_URL .. "/controller/firmware_list", "firmware_list")
     shell.run("startup.lua", "--install")
 end
 
 local function installVaultRelay()
-    downloadFile(ROOT_URL .. "/vault_relay/startup.lua", "startup.lua")
-    downloadFile(ROOT_URL .. "/shared/self_update.lua", "self_update.lua")
+    downloadFile(ROOT_URL .. "/self_update_startup.lua", "startup.lua")
+    downloadFile(ROOT_URL .. "/vault_relay/firmware_list", "firmware_list")
     shell.run("startup.lua", "--install")
 end
 
 local function installBufferRelay()
-    downloadFile(ROOT_URL .. "/buffer_relay/startup.lua", "startup.lua")
-    downloadFile(ROOT_URL .. "/shared/self_update.lua", "self_update.lua")
+    downloadFile(ROOT_URL .. "/self_update_startup.lua", "startup.lua")
+    downloadFile(ROOT_URL .. "/buffer_relay/firmware_list", "firmware_list")
     shell.run("startup.lua", "--install")
 end
 

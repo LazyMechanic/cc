@@ -1,8 +1,13 @@
 {
-    "ui_refresh_interval": 1,
-    "monitor_text_scale": 0.5,
-    "init_timeout": 3,
-    "buffer_inventory": "create:item_vault_174",
+    "hostname": "controller",
+    "uiRefreshInterval": 1,
+    "monitorTextScale": 0.5,
+    "initTimeout": 10,
+    "pingInterval": 3,
+    "pongTimeout": 3,
+    "requestStateInterval": 5,
+    "moveTimeout": 5,
+    "bufferInventory": "create:item_vault_174",
     "vaults": {
         "vault_0": "storage_0",
         "vault_1": "storage_0",

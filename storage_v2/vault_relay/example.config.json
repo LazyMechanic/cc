@@ -1,7 +1,12 @@
 {
     "hostname": "vault_0",
-    "inventory_side": "back",
-    "redstone_side": "bottom",
-    "max_pulse_count": 5,
-    "last_pulse_delay": 3
+    "controllerHostname": "controller",
+    "inventorySide": "back",
+    "redstoneSide": [ "bottom" ],
+    "maxPulseCount": 5,
+    "lastPulseDelay": 3,
+    "pingInterval": 3,
+    "pongTimeout": 3,
+    "reconnectInterval": 3,
+    "connectTimeout": 1
 }

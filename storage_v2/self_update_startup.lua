@@ -1,4 +1,4 @@
-local self_update = require("self_update")
+local pp = require("cc.pretty")
 
 local args = {...}
 
@@ -8,8 +8,7 @@ local args = {...}
 
 local ROOT_URL = "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2"
 
-local STORAGE_SCRIPT = "storage.lua"
-local MONITOR_SCRIPT = "monitor.lua"
+local SCRIPT = "entrypoint.lua"
 
 -- ################################################### --
 -- Install
@@ -29,15 +28,29 @@ local function downloadFile(url, path)
 end
 
 local function installFirmware()
-    downloadFile(ROOT_URL .. "/shared/common.lua", "common.lua")
-    downloadFile(ROOT_URL .. "/controller/monitor.lua", MONITOR_SCRIPT)
-    downloadFile(ROOT_URL .. "/controller/storage.lua", STORAGE_SCRIPT)
-    downloadFile(ROOT_URL .. "/controller/example.config.json", "example.config.json")
+    local firmware_list = {}
+    for line in io.lines("firmware_list") do
+        local url, path = line:match("([^,]+),([^,]+)")
+        if url and path then
+            table.insert(firmware_list, { url = ROOT_URL .. url, path = path })
+        end
+    end
+
+    for _, f in ipairs(firmware_list) do
+        downloadFile(f.url, f.path)
+    end
 end
 
 -- ################################################### --
 -- Launch
 -- ################################################### --
+
+local UPDATE_PROTOCOL = "self_update"
+
+local function waitUpdateRequest()
+    local src_id, msg = rednet.receive(UPDATE_PROTOCOL)
+    print(("Received message from %d: %s"):format(src_id, pp.render(pp.pretty(msg))))
+end
 
 local function initRednet()
     local found = false
@@ -58,15 +71,14 @@ end
 local function launch()
     print("Press Ctrl+T to terminate")
     sleep(1)
-
+    
     initRednet()
     while true do
         local update_requested = false
         parallel.waitForAny(
-            function() shell.run(STORAGE_SCRIPT) end,
-            function() shell.run(MONITOR_SCRIPT) end,
+            function() shell.run(SCRIPT) end,
             function()
-                self_update.waitRequest()
+                waitUpdateRequest()
                 update_requested = true
             end
         )

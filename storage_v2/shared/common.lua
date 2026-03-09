@@ -1,8 +1,5 @@
 local common = {}
 
-common.BUFFER_PROTOCOL = "storage_buffer_relay"
-common.VAULT_PROTOCOL = "storage_vault_relay"
-
 -- ################################################### --
 -- Log Levels
 -- ################################################### --
@@ -185,5 +182,133 @@ common.initLogging = LoggerRegistry.init
 common.shutdownLogging = LoggerRegistry.shutdown
 common.setLogLevel = LoggerRegistry.setLevel
 common.setLogConsole = LoggerRegistry.setConsole
+
+-- ################################################### --
+-- Schema validation
+-- ################################################### --
+
+--[[ Schema example:
+local userSchema = {
+    id = "string",
+    age = "number",
+    tags = {"array", "string"},
+    metadata = {"map", "string", "string"}, -- keys are strings, values are strings
+    owner = {
+        name = "string",
+        age = "number"
+    },
+    permissions = {"map", "string", {"array", "string"}} -- map values are arrays
+}
+
+local validPayload = {
+    id = "abc123",
+    age = 42,
+    tags = {"admin", "editor"},
+    metadata = {foo="bar", baz="qux"},
+    owner = {name="Alice", age=30},
+    permissions = {
+        files = {"read", "write"},
+        settings = {"read"}
+    }
+}
+
+local invalidPayload = {
+    id = "abc123",
+    age = "not a number", -- invalid type
+    tags = {"admin", "editor"},
+    metadata = {foo="bar"},
+    owner = {name="Alice", age=30},
+    permissions = {files = {"read"}}
+}
+
+print(validateSchema(validPayload, userSchema))   -- true
+print(validateSchema(invalidPayload, userSchema)) -- false
+]]
+function common.validateSchema(data, schema)
+    -- primitive schema (string type)
+    if type(schema) == "string" then
+        return type(data) == schema
+    end
+
+    -- schema must be a table now
+    if type(schema) ~= "table" then
+        return false
+    end
+
+    -- array schema: {"array", itemSchema}
+    if schema[1] == "array" then
+        if type(data) ~= "table" then
+            return false
+        end
+        local itemSchema = schema[2]
+        for i = 1, #data do
+            if not common.validateSchema(data[i], itemSchema) then
+                return false
+            end
+        end
+        return true
+    end
+
+    -- map schema: {"map", keySchema, valueSchema}
+    if schema[1] == "map" then
+        if type(data) ~= "table" then
+            return false
+        end
+        local keySchema = schema[2]
+        local valueSchema = schema[3]
+        for k, v in pairs(data) do
+            if not common.validateSchema(k, keySchema) then
+                return false
+            end
+            if not common.validateSchema(v, valueSchema) then
+                return false
+            end
+        end
+        return true
+    end
+
+    -- object schema (nested fields)
+    if type(data) ~= "table" then
+        return false
+    end
+    for field, fieldSchema in pairs(schema) do
+        if data[field] == nil then
+            return false
+        end
+        if not common.validateSchema(data[field], fieldSchema) then
+            return false
+        end
+    end
+
+    return true
+end
+
+---comment generate unique ID
+---@return string ID
+function common.generateID()
+    local template ='xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+    local ans = string.gsub(template, '[xy]', function (c)
+        local v = (c == 'x') and math.random(0, 0xf) or math.random(8, 0xb)
+        return string.format('%x', v)
+    end)
+    return ans
+end
+
+---comment open rednet on all sides
+---@return table sides
+function common.openRednet()
+    local sides = {"top","bottom","left","right","front","back"}
+    local opened = {}
+    for _, side in ipairs(sides) do
+        if peripheral.getType(side) == "modem" then
+            if not rednet.isOpen(side) then
+                rednet.open(side)
+                table.insert(opened, side)
+            end
+        end
+    end
+
+    return opened
+end
 
 return common
