@@ -7,8 +7,9 @@ local args = {...}
 -- ################################################### --
 
 local ROOT_URL = "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2"
+local ROOT_PATH = "firmware/"
 
-local SCRIPT = "entrypoint.lua"
+local SCRIPT = "firmware/entrypoint.lua"
 
 -- ################################################### --
 -- Install
@@ -32,7 +33,7 @@ local function installFirmware()
     for line in io.lines("firmware_list") do
         local url, path = line:match("([^,]+),([^,]+)")
         if url and path then
-            table.insert(firmware_list, { url = ROOT_URL .. url, path = path })
+            table.insert(firmware_list, { url = ROOT_URL .. url, path = ROOT_PATH .. path })
         end
     end
 
