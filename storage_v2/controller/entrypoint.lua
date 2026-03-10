@@ -899,7 +899,7 @@ end
 
 local function vaultPingTask()
     for _, vault in pairs(stock.vaults) do
-        if vault.connected and vault.id then
+        if vault.connected then
             vaultApi.server.ping({ id = vault.id, timeout = cfg.pongTimeout })
                 :next(function(_)
                     log:debug(("received pong from vault %s"):format(vault.name))
@@ -1073,7 +1073,9 @@ end
 
 local function bufferPingTask()
     -- If no buffer then skip ping
-    if not stock.buffer then return nil end
+    if not stock.buffer.connected then
+        return nil
+    end
 
     bufApi.server.ping({ id = stock.buffer.id, timeout = cfg.pongTimeout })
         :next(function(_) 
