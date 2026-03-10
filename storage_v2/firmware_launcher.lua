@@ -53,7 +53,7 @@ local function waitUpdateRequest()
     print(("Received message from %d: %s"):format(src_id, pp.render(pp.pretty(msg))))
 end
 
-local function initRednet()
+local function openRednet()
     local found = false
     local sides = {"top","bottom","left","right","front","back"}
     for _, side in ipairs(sides) do
@@ -73,7 +73,7 @@ local function launch()
     print("Press Ctrl+T to terminate")
     sleep(1)
     
-    initRednet()
+    openRednet()
     while true do
         local update_requested = false
         parallel.waitForAny(
@@ -101,10 +101,7 @@ end
 local function main()
     if args[1] == "--install" then
         installFirmware()
-    elseif args[1] == "--launch" then
-        launch()
     else
-        installFirmware()
         launch()
     end
 end
@@ -115,5 +112,5 @@ end
 
 local ok, err = pcall(main)
 if not ok then
-    printError("Fatal error occurried: " .. tostring(err))
+    printError("Fatal error occurred: " .. tostring(err))
 end
