@@ -2,9 +2,30 @@ local pp = require("cc.pretty")
 
 local args = {...}
 
+local function getScriptArgs(args)
+    local entry_args = {}
+    local found = false
+
+    for _, a in ipairs(args) do
+        if found then
+            table.insert(entry_args, a)
+        elseif a == "--" then
+            found = true
+        end
+    end
+
+    return entry_args
+end
+
 -- ################################################### --
 -- Configuration
 -- ################################################### --
+
+local SCRIPT_ARGS = getScriptArgs(args)
+local SCRIPT_EXTRA_ARGS = {
+    "--log",
+    "entrypoint.log"
+}
 
 local ROOT_URL = "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2"
 local ROOT_PATH = "firmware/"
@@ -46,7 +67,7 @@ end
 -- Launch
 -- ################################################### --
 
-local UPDATE_PROTOCOL = "self_update"
+local UPDATE_PROTOCOL = "firmware_update"
 
 local function waitUpdateRequest()
     local src_id, msg = rednet.receive(UPDATE_PROTOCOL)
@@ -56,6 +77,7 @@ end
 local function openRednet()
     local found = false
     local sides = {"top","bottom","left","right","front","back"}
+
     for _, side in ipairs(sides) do
         if peripheral.getType(side) == "modem" then
             found = true
@@ -72,12 +94,20 @@ end
 local function launch()
     print("Press Ctrl+T to terminate")
     sleep(1)
-    
+
     openRednet()
+
     while true do
         local update_requested = false
+
         parallel.waitForAny(
-            function() shell.run(SCRIPT) end,
+            function()
+                shell.run(
+                    SCRIPT,
+                    table.unpack(SCRIPT_ARGS),
+                    table.unpack(SCRIPT_EXTRA_ARGS)
+                )
+            end,
             function()
                 waitUpdateRequest()
                 update_requested = true

@@ -1166,6 +1166,7 @@ end
 local function parseArgs()
     local options = {
         verbose = false,
+        logFile = "logs/entrypoint.log",
         config = "config.json",
     }
     
@@ -1174,11 +1175,12 @@ local function parseArgs()
         local a = arg[i]
         if a == "--verbose" or a == "-v" then
             options.verbose = true
+        elseif a == "--log" or a == "-l" then
+            i = i + 1
+            if arg[i] then options.logFile = arg[i] end
         elseif a == "--config" or a == "-c" then
             i = i + 1
-            if arg[i] then
-                options.config = arg[i]
-            end
+            if arg[i] then options.config = arg[i] end
         end
         i = i + 1
     end
@@ -1214,7 +1216,7 @@ local function main()
     
     -- Initialize logging
     common.initLogging({
-        filename = "logs/monitor.log",
+        filename = options.logFile,
         level = options.verbose and common.LogLevel.DEBUG or common.LogLevel.INFO,
         console = false,
         timestamp = true,
