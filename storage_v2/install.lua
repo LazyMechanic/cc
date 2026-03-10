@@ -24,23 +24,23 @@ end
 
 local function installController()
     downloadFile(ROOT_URL .. "/startup.lua", "startup.lua")
-    downloadFile(ROOT_URL .. "/firmware_launcher.lua", "firmware_launcher.lua")
+    downloadFile(ROOT_URL .. "/launcher.lua", "launcher.lua")
     downloadFile(ROOT_URL .. "/controller/firmware.json", "firmware.json")
-    shell.run("firmware_launcher.lua", "--install")
+    shell.run("launcher.lua", "--install")
 end
 
 local function installVaultRelay()
     downloadFile(ROOT_URL .. "/startup.lua", "startup.lua")
-    downloadFile(ROOT_URL .. "/firmware_launcher.lua", "firmware_launcher.lua")
+    downloadFile(ROOT_URL .. "/launcher.lua", "launcher.lua")
     downloadFile(ROOT_URL .. "/vault_relay/firmware.json", "firmware.json")
-    shell.run("firmware_launcher.lua", "--install")
+    shell.run("launcher.lua", "--install")
 end
 
 local function installBufferRelay()
     downloadFile(ROOT_URL .. "/startup.lua", "startup.lua")
-    downloadFile(ROOT_URL .. "/firmware_launcher.lua", "firmware_launcher.lua")
+    downloadFile(ROOT_URL .. "/launcher.lua", "launcher.lua")
     downloadFile(ROOT_URL .. "/buffer_relay/firmware.json", "firmware.json")
-    shell.run("firmware_launcher.lua", "--install")
+    shell.run("launcher.lua", "--install")
 end
 
 local function main(args)

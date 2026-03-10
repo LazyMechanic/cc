@@ -27,7 +27,7 @@ local SCRIPT_EXTRA_ARGS = {
     "entrypoint.log"
 }
 
-local ROOT_PATH = "firmware/"
+local ROOT_PATH = "firmware"
 
 local SCRIPT = "firmware/entrypoint.lua"
 
@@ -109,6 +109,8 @@ local function launch()
 
         parallel.waitForAny(
             function()
+                print("[DEBUG] SCRIPT_ARGS", pp.render(pp.pretty(SCRIPT_ARGS)))
+                print("[DEBUG] SCRIPT_EXTRA_ARGS", pp.render(pp.pretty(SCRIPT_EXTRA_ARGS)))
                 shell.run(
                     SCRIPT,
                     table.unpack(SCRIPT_ARGS),
@@ -151,5 +153,5 @@ end
 
 local ok, err = pcall(main)
 if not ok then
-    printError("Fatal error occurred: " .. tostring(err))
+    printError("Launcher fatal error occurred: " .. tostring(err))
 end

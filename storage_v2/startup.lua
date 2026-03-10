@@ -1,5 +1,5 @@
 local args = {...}
-local LAUNCHER_FILE = "firmware_launcher.lua"
+local LAUNCHER_FILE = "launcher.lua"
 
 local function main()
     -- Ensure the launcher exists
@@ -32,5 +32,5 @@ end
 
 local ok, err = pcall(main)
 if not ok then
-    printError("Fatal error occurred: " .. tostring(err))
+    printError("Startup fatal error occurred: " .. tostring(err))
 end
