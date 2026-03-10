@@ -26,11 +26,11 @@
         },
         {
             "path": "entrypoint.lua",
-            "url": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/storage_v2/controller/entrypoint.lua"
+            "url": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/controller/entrypoint.lua"
         },
         {
             "path": "example.config.json",
-            "url": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/storage_v2/controller/example.config.json"
+            "url": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/controller/example.config.json"
         }
     ]
 }
