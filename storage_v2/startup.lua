@@ -5,7 +5,7 @@ local function main()
     -- Ensure the launcher exists
     if not fs.exists(LAUNCHER_FILE) then
         printError("Error: " .. LAUNCHER_FILE .. " not found!")
-        print("Press any key to open shell...")
+        print("Press any key to continue...")
         os.pullEvent("key")
         return
     end

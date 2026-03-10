@@ -27,7 +27,6 @@ local SCRIPT_EXTRA_ARGS = {
     "entrypoint.log"
 }
 
-local ROOT_URL = "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2"
 local ROOT_PATH = "firmware/"
 
 local SCRIPT = "firmware/entrypoint.lua"
@@ -50,16 +49,24 @@ local function downloadFile(url, path)
 end
 
 local function installFirmware()
-    local firmware_list = {}
-    for line in io.lines("firmware_list") do
-        local url, path = line:match("([^,]+),([^,]+)")
-        if url and path then
-            table.insert(firmware_list, { url = ROOT_URL .. url, path = ROOT_PATH .. path })
-        end
+    local file = fs.open("firmware.json", "r")
+    if not file then
+        error("Failed to open manifest file 'firmware.json'")
     end
+    local content = file.readAll()
+    file.close()
 
-    for _, f in ipairs(firmware_list) do
-        downloadFile(f.url, f.path)
+    ---@class File
+    ---@field path string
+    ---@field url string
+
+    ---@class Manifest
+    ---@field files File[]
+    local manifest = textutils.unserializeJSON(content)
+
+    for _, f in ipairs(manifest.files) do
+        local finalPath = ("%s/%s"):format(ROOT_PATH, f.path)
+        downloadFile(f.url, finalPath)
     end
 end
 
@@ -119,6 +126,8 @@ local function launch()
             installFirmware()
         else
             print("Shell finished")
+            print("Press any key to continue...")
+            os.pullEvent("key")
             break
         end
     end

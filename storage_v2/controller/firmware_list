@@ -1,8 +1,0 @@
-/taskmaster/taskmaster.lua
-/shared/common.lua,common.lua
-/shared/rpc.lua,rpc.lua
-/shared/rpc_api.lua,rpc_api.lua
-/shared/vault_relay_api.lua,vault_relay_api.lua
-/shared/buffer_relay_api.lua,buffer_relay_api.lua
-/controller/entrypoint.lua,entrypoint.lua
-/controller/example.config.json,example.config.json

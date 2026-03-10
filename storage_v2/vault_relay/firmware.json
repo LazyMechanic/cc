@@ -1,0 +1,32 @@
+{
+    "files": [
+        {
+            "path": "taskmaster.lua",
+            "url": "https://gist.githubusercontent.com/MCJack123/1678fb2c240052f1480b07e9053d4537/raw/ad05fb4970c3364015742c0a78706fe1d0355e7f/taskmaster.lua"
+        },
+        {
+            "path": "common.lua",
+            "url": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/shared/common.lua"
+        },
+        {
+            "path": "rpc.lua",
+            "url": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/shared/rpc.lua"
+        },
+        {
+            "path": "rpc_api.lua",
+            "url": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/shared/rpc_api.lua"
+        },
+        {
+            "path": "vault_relay_api.lua",
+            "url": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/shared/vault_relay_api.lua"
+        },
+        {
+            "path": "entrypoint.lua",
+            "url": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/storage_v2/vault_relay/entrypoint.lua"
+        },
+        {
+            "path": "example.config.json",
+            "url": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/storage_v2/vault_relay/example.config.json"
+        }
+    ]
+}
