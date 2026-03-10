@@ -196,6 +196,10 @@ local function computeDisplayData()
             storageName = "UNKNOWN"
         end
 
+        if not vault.connected then
+            goto continue
+        end
+
         local storage = storageMap[storageName]
         if not storage then
             storage = {
@@ -220,6 +224,8 @@ local function computeDisplayData()
             itemCount = vault.itemCount,
             percentage = calculatePercentage(vault.occupied, vault.total),
         })
+
+        ::continue::
     end
 
     -- Sort all storages and vaults
