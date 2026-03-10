@@ -189,43 +189,40 @@ end
 local function computeDisplayData()
     local storageMap = {}
     
-    for vaultHostname, vault in pairs(stock.vaults) do
-        local storageName = cfg.vaults[vaultHostname]
-        if not storageName then
-            log:warn(("unknown vault '%s', storage not found"):format(vaultHostname)) 
-            storageName = "UNKNOWN"
+    for _, vault in pairs(stock.vaults) do
+        if vault.connected then
+            local storageName = cfg.vaults[vault.name]
+            if not storageName then
+                log:warn(("unknown vault '%s', storage not found"):format(vault.name)) 
+                storageName = "UNKNOWN"
+            end
+
+
+            local storage = storageMap[storageName]
+            if not storage then
+                storage = {
+                    name = storageName,
+                    total = 0,
+                    occupied = 0,
+                    itemCount = 0,
+                    percentage = 0.0,
+                    vaults = {},
+                }
+                storageMap[storageName] = storage
+            end
+
+            storage.total = storage.total + vault.total
+            storage.occupied = storage.occupied + vault.occupied
+            storage.itemCount = storage.itemCount + vault.itemCount
+            
+            table.insert(storage.vaults, {
+                name = vault.name,
+                total = vault.total,
+                occupied = vault.occupied,
+                itemCount = vault.itemCount,
+                percentage = calculatePercentage(vault.occupied, vault.total),
+            })
         end
-
-        if not vault.connected then
-            goto continue
-        end
-
-        local storage = storageMap[storageName]
-        if not storage then
-            storage = {
-                name = storageName,
-                total = 0,
-                occupied = 0,
-                itemCount = 0,
-                percentage = 0.0,
-                vaults = {},
-            }
-            storageMap[storageName] = storage
-        end
-
-        storage.total = storage.total + vault.total
-        storage.occupied = storage.occupied + vault.occupied
-        storage.itemCount = storage.itemCount + vault.itemCount
-        
-        table.insert(storage.vaults, {
-            name = vault.name,
-            total = vault.total,
-            occupied = vault.occupied,
-            itemCount = vault.itemCount,
-            percentage = calculatePercentage(vault.occupied, vault.total),
-        })
-
-        ::continue::
     end
 
     -- Sort all storages and vaults
