@@ -22,10 +22,6 @@ end
 -- ################################################### --
 
 local SCRIPT_ARGS = getScriptArgs(args)
-local SCRIPT_EXTRA_ARGS = {
-    "--log",
-    "entrypoint.log"
-}
 
 local ROOT_PATH = "firmware"
 
@@ -109,13 +105,7 @@ local function launch()
 
         parallel.waitForAny(
             function()
-                print("[DEBUG] SCRIPT_ARGS", pp.render(pp.pretty(SCRIPT_ARGS)))
-                print("[DEBUG] SCRIPT_EXTRA_ARGS", pp.render(pp.pretty(SCRIPT_EXTRA_ARGS)))
-                shell.run(
-                    SCRIPT,
-                    table.unpack(SCRIPT_ARGS),
-                    table.unpack(SCRIPT_EXTRA_ARGS)
-                )
+                shell.run(SCRIPT, table.unpack(SCRIPT_ARGS))
             end,
             function()
                 waitUpdateRequest()
