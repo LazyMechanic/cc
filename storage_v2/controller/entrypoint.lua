@@ -180,7 +180,9 @@ local function calculatePercentage(part, total)
 end
 
 local function getBufferPercentage()
-    if not stock.buffer then
+    if not stock.buffer
+        or stock.buffer and not stock.buffer.connected
+    then
         return 0
     end
     return calculatePercentage(stock.buffer.occupied, stock.buffer.total)
