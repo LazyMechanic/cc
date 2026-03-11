@@ -1070,7 +1070,7 @@ end
 ---@param sender ComputerId
 ---@param name string
 local function onBufferConnect(sender, name)
-    if stock.buffer then
+    if stock.buffer.connected then
         log:warn(("buffer %s already connected as %d"):format(stock.buffer.name, stock.buffer.id))
     end
 
