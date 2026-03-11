@@ -1,4 +1,5 @@
 {
+    "origin": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/buffer_relay/firmware.json",
     "files": [
         {
             "path": "taskmaster.lua",

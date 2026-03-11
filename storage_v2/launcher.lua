@@ -23,13 +23,24 @@ end
 
 local SCRIPT_ARGS = getScriptArgs(args)
 
-local ROOT_PATH = "firmware"
+local FIRMWARE_DIR = "firmware"
+local FIRMWARE_BACKUP_DIR = "firmware.bak"
 
 local SCRIPT = "firmware/entrypoint.lua"
 
 -- ################################################### --
 -- Install
 -- ################################################### --
+
+
+    
+---@class File
+---@field path string
+---@field url string
+
+---@class Manifest
+---@field origin string
+---@field files File[]
 
 local function downloadFile(url, path)
     print("Downloading " .. url .. " -> " .. path)
@@ -44,24 +55,38 @@ local function downloadFile(url, path)
     end
 end
 
-local function installFirmware()
+---@return Manifest
+local function readManifest()
     local file = fs.open("firmware.json", "r")
     if not file then
         error("Failed to open manifest file 'firmware.json'")
     end
     local content = file.readAll()
     file.close()
+    return textutils.unserializeJSON(content)
+end
 
-    ---@class File
-    ---@field path string
-    ---@field url string
+local function installFirmware()
+    local manifest = readManifest()
 
-    ---@class Manifest
-    ---@field files File[]
-    local manifest = textutils.unserializeJSON(content)
+    if fs.exists(FIRMWARE_BACKUP_DIR) then
+        print("Delete old firmware backup")
+        fs.delete(FIRMWARE_BACKUP_DIR)
+    end
 
+    if fs.exists(FIRMWARE_DIR) then
+        print("Backup old firmware...")
+        fs.move(FIRMWARE_DIR, FIRMWARE_BACKUP_DIR)
+    end
+
+    print("Update manifest...")
+    downloadFile(manifest.origin, ("%s/firmware.json"):format(FIRMWARE_DIR))
+
+    local manifest = readManifest()
+
+    print("Update files")
     for _, f in ipairs(manifest.files) do
-        local finalPath = ("%s/%s"):format(ROOT_PATH, f.path)
+        local finalPath = ("%s/%s"):format(FIRMWARE_DIR, f.path)
         downloadFile(f.url, finalPath)
     end
 end
