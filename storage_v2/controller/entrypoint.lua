@@ -883,8 +883,8 @@ local function onVaultConnect(sender, name)
         log:warn(("vault %s already connected as %d"):format(vault.name, vault.id))
     end
 
-
-    stock.vaultIds[vault.id] = nil
+    -- Remove old
+    if vault.id then stock.vaultIds[vault.id] = nil end
     stock.vaultIds[sender] = name
 
     vault.id = sender
@@ -1225,7 +1225,7 @@ local function main()
     common.initLogging({
         filename = options.logFile,
         level = options.verbose and common.LogLevel.DEBUG or common.LogLevel.INFO,
-        console = false,
+        console = true,
         timestamp = true,
         append = false,
     })

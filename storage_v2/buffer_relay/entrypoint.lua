@@ -145,7 +145,7 @@ local function connectTask(task)
                     log:info("connected to controller")
                 end)
                 :catch(function(err)
-                    log:error("failed to connect to controller")
+                    log:error(("failed to connect to controller: %s"):format(err))
                     loop:timer(cfg.reconnectInterval, function()
                         scheduleConnect()
                         return 0
