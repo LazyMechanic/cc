@@ -75,7 +75,7 @@ return function(loop)
                         -- Current count
                         count = "number",
                         -- NBT tag
-                        nbt = "number",
+                        nbt = "string|nil",
                         -- Max count in stack in that slot
                         maxCount = "number",
                     }
@@ -98,7 +98,7 @@ return function(loop)
                         -- Current count
                         count = "number",
                         -- NBT tag
-                        nbt = "number",
+                        nbt = "string|nil",
                         -- Max count in stack in that slot
                         maxCount = "number",
                     }
