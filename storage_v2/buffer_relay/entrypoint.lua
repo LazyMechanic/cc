@@ -33,6 +33,17 @@ local max_count_cache = {}
 -- Main logic
 -- ################################################### --
 
+local function warmingUpCache()
+    local items = inv.list()
+    for slot, item in pairs(items) do
+        if not max_count_cache[item.name] then
+            --log:debug("item limit cache miss")
+            local detail = inv.getItemDetail(slot)
+            max_count_cache[item.name] = detail.maxCount
+        end
+    end
+end
+
 local function scheduleConnect()
     connectQueue:push({})
 end
@@ -249,6 +260,8 @@ local function main()
 
     inv = initInventory()
     assert(inv, "inventory not found")
+
+    warmingUpCache()
 
     scheduleConnect()
 

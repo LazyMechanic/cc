@@ -3,7 +3,7 @@
     "uiRefreshInterval": 1,
     "monitorTextScale": 0.5,
     "initTimeout": 10,
-    "pingInterval": 3,
+    "pingInterval": 5,
     "pongTimeout": 3,
     "requestStateInterval": 5,
     "moveTimeout": 5,

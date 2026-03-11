@@ -5,7 +5,7 @@
     "redstoneSide": [ "left", "right" ],
     "maxPulseCount": 5,
     "lastPulseDelay": 3,
-    "pingInterval": 3,
+    "pingInterval": 5,
     "pongTimeout": 3,
     "reconnectInterval": 3,
     "connectTimeout": 1
