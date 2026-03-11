@@ -57,14 +57,14 @@ local COLOR_BUTTON_FG = colors.white
 ---@field name VaultName
 ---@field total number
 ---@field occupied number
----@field items number
+---@field itemCount number
 ---@field percentage number
 
 ---@class StorageView
 ---@field name StorageName
 ---@field total number
 ---@field occupied number
----@field items number
+---@field itemCount number
 ---@field percentage number
 ---@field vaults VaultView[]
 
@@ -229,12 +229,12 @@ local function computeDisplayData()
     -- Sort all storages and vaults
     local totalSlots = 0
     local totalOccupied = 0
-    local totalItems = 0
+    local totalItemCount = 0
     local storageList = {}
     for _, storage in pairs(storageMap) do
         totalSlots = totalSlots + storage.total
         totalOccupied = totalOccupied + storage.occupied
-        totalItems = totalItems + storage.items
+        totalItemCount = totalItemCount + storage.itemCount
 
         table.sort(storage.vaults, function(a, b)
             local na = tonumber(a.name:match("_(%d+)$")) or 0
@@ -253,7 +253,7 @@ local function computeDisplayData()
     computedData.storageList = storageList
     computedData.totalSlots = totalSlots
     computedData.totalOccupied = totalOccupied
-    computedData.totalItemCount = totalItems
+    computedData.totalItemCount = totalItemCount
     computedData.totalPercentage = calculatePercentage(totalOccupied, totalSlots)
 end
 
@@ -709,7 +709,7 @@ local function drawStorageDetail()
             x = x + layout.slots_width + 1
             
             -- Items
-            local items_str = tostring(vault.items)
+            local items_str = tostring(vault.itemCount)
             writeAt(x, row_y, padLeft(items_str, layout.items_width), COLOR_TEXT_DIM, COLOR_BG)
             
             row_y = row_y + 1
@@ -724,7 +724,7 @@ local function drawStorageDetail()
     -- Summary line above footer
     local summary_y = displayHeight - 1
     local summary = string.format("Total: %d/%d slots, %d items",
-        storage.occupied, storage.total, storage.items)
+        storage.occupied, storage.total, storage.itemCount)
     fillLine(summary_y, COLOR_BG)
     centerText(summary_y, summary, COLOR_TEXT_DIM, COLOR_BG)
     
