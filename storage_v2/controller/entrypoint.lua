@@ -66,7 +66,7 @@ local COLOR_BUTTON_FG = colors.white
 ---@field occupied number
 ---@field itemCount number
 ---@field percentage number
----@field vaults VaultView[]
+---@field vaultList VaultView[]
 
 ---@class Item
 ---@field name ItemName
@@ -207,7 +207,7 @@ local function computeDisplayData()
                     occupied = 0,
                     itemCount = 0,
                     percentage = 0.0,
-                    vaults = {},
+                    vaultList = {},
                 }
                 storageMap[storageName] = storage
             end
@@ -217,7 +217,7 @@ local function computeDisplayData()
             storage.itemCount = storage.itemCount + vault.itemCount
             storage.percentage = calculatePercentage(storage.occupied, storage.total)
             
-            table.insert(storage.vaults, {
+            table.insert(storage.vaultList, {
                 name = vault.name,
                 total = vault.total,
                 occupied = vault.occupied,
@@ -237,7 +237,7 @@ local function computeDisplayData()
         totalOccupied = totalOccupied + storage.occupied
         totalItemCount = totalItemCount + storage.itemCount
 
-        table.sort(storage.vaults, function(a, b)
+        table.sort(storage.vaultList, function(a, b)
             local na = tonumber(a.name:match("_(%d+)$")) or 0
             local nb = tonumber(b.name:match("_(%d+)$")) or 0
             return na < nb
@@ -666,7 +666,7 @@ local function drawStorageDetail()
     drawColumnHeaders(2, columns)
     
     -- Calculate pagination
-    local numVaults = #storage.vaults
+    local numVaults = #storage.vaultList
     totalPages = math.max(1, math.ceil(numVaults / itemsPerPage))
     
     if currentPage > totalPages then
@@ -679,7 +679,7 @@ local function drawStorageDetail()
     -- Draw vault rows
     local rowY = 4
     for i = startIdx, endIdx do
-        local vault = storage.vaults[i]
+        local vault = storage.vaultList[i]
         if vault then
             local x = 1
             
@@ -937,7 +937,7 @@ end
 
 local function availableItemCount(storage, targetItem)
     local available = 0
-    for _, vaultName in ipairs(storage.vaults) do
+    for _, vaultName in ipairs(storage.vaultList) do
         local vault = stock.vaults[vaultName]
         if not vault.connected then
             log:warn(("vault %s is disconnected, skip"):format(vaultName))
