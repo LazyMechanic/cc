@@ -215,6 +215,7 @@ local function computeDisplayData()
             storage.total = storage.total + vault.total
             storage.occupied = storage.occupied + vault.occupied
             storage.itemCount = storage.itemCount + vault.itemCount
+            storage.percentage = calculatePercentage(storage.occupied, storage.total)
             
             table.insert(storage.vaults, {
                 name = vault.name,
@@ -490,14 +491,14 @@ local function calculateStorageListLayout()
     local layout = {}
     
     -- Fixed widths
-    layout.name_width = 12     -- "storage_XX" + padding
-    layout.pct_width = 4       -- "100%"
-    layout.slots_width = 11    -- "9720/9720" + padding
+    layout.nameWidth = 12     -- "storage_XX" + padding
+    layout.pctWidth = 4       -- "100%"
+    layout.slotsWidth = 11    -- "9720/9720" + padding
     layout.spacing = 3         -- spaces between columns
     
     -- Progress bar gets remaining space
-    local remaining = displayWidth - layout.name_width - layout.pct_width - layout.slots_width - layout.spacing
-    layout.progress_width = math.max(6, remaining)
+    local remaining = displayWidth - layout.nameWidth - layout.pctWidth - layout.slotsWidth - layout.spacing
+    layout.progressWidth = math.max(6, remaining)
     
     return layout
 end
@@ -508,86 +509,80 @@ local function drawStorageList()
     -- Compute fresh data
     computeDisplayData()
     
-    -- Show waiting screen if no storages
-    if not stock.storages or not next(stock.storages) then
-        drawWaitingScreen()
-        return
-    end
-    
     -- Header with total stats
-    local total_pct = computedData.totalPercentage
-    local header_title = string.format("Storage Monitor [%d%%]", total_pct)
-    drawHeader(header_title)
+    local totalPct = computedData.totalPercentage
+    local headerTitle = string.format("Storage Monitor [%d%%]", totalPct)
+    drawHeader(headerTitle)
     
     -- Buffer percentage on top right
-    local buffer_pct = getBufferPercentage()
-    local buffer_text = string.format("Buffer: %d%%", buffer_pct)
-    local buffer_color = buffer_pct > 0 and getProgressColor(buffer_pct) or COLOR_HEADER_FG
-    writeAt(displayWidth - #buffer_text, 1, buffer_text, buffer_color, COLOR_HEADER_BG)
+    local bufferPct = getBufferPercentage()
+    local bufferText = string.format("Buffer: %d%%", bufferPct)
+    local bufferColor = bufferPct > 0 and getProgressColor(bufferPct) or COLOR_HEADER_FG
+    writeAt(displayWidth - #bufferText, 1, bufferText, bufferColor, COLOR_HEADER_BG)
     
     local layout = calculateStorageListLayout()
     
     -- Column headers
     local columns = {
-        { name = "Storage", width = layout.name_width },
-        { name = "Fill", width = layout.progress_width },
-        { name = "Pct", width = layout.pct_width },
-        { name = "Slots", width = layout.slots_width },
+        { name = "Storage", width = layout.nameWidth },
+        { name = "Fill", width = layout.progressWidth },
+        { name = "Pct", width = layout.pctWidth },
+        { name = "Slots", width = layout.slotsWidth },
     }
     drawColumnHeaders(2, columns)
     
     -- Calculate pagination
-    local num_storages = #computedData.storageList
-    totalPages = math.max(1, math.ceil(num_storages / itemsPerPage))
+    local numStorages = #computedData.storageList
+    totalPages = math.max(1, math.ceil(numStorages / itemsPerPage))
     
     if currentPage > totalPages then
         currentPage = totalPages
     end
     
-    local start_idx = (currentPage - 1) * itemsPerPage + 1
-    local end_idx = math.min(start_idx + itemsPerPage - 1, num_storages)
+    local startIdx = (currentPage - 1) * itemsPerPage + 1
+    local endIdx = math.min(startIdx + itemsPerPage - 1, numStorages)
     
     -- Draw storage rows
-    local row_y = 4
-    for i = start_idx, end_idx do
+    local rowY = 4
+    for i = startIdx, endIdx do
         local storage = computedData.storageList[i]
         if storage then
             local x = 1
             
             -- Name column
-            local name = truncateString(storage.name, layout.name_width)
-            writeAt(x, row_y, padRight(name, layout.name_width), COLOR_TEXT, COLOR_BG)
-            x = x + layout.name_width + 1
+            local name = truncateString(storage.name, layout.nameWidth)
+            writeAt(x, rowY, padRight(name, layout.nameWidth), COLOR_TEXT, COLOR_BG)
+            x = x + layout.nameWidth + 1
             
             -- Progress bar
-            local progress_color = getProgressColor(storage.percentage)
-            drawProgressBar(x, row_y, layout.progress_width, storage.percentage, progress_color)
-            x = x + layout.progress_width + 1
+            local progressColor = getProgressColor(storage.percentage)
+            drawProgressBar(x, rowY, layout.progressWidth, storage.percentage, progressColor)
+            x = x + layout.progressWidth + 1
             
             -- Percentage
-            local pct_str = string.format("%3d%%", storage.percentage)
-            writeAt(x, row_y, pct_str, getProgressColor(storage.percentage), COLOR_BG)
-            x = x + layout.pct_width + 1
+            local pctStr = string.format("%3d%%", storage.percentage)
+            writeAt(x, rowY, pctStr, getProgressColor(storage.percentage), COLOR_BG)
+            x = x + layout.pctWidth + 1
             
             -- Slots
-            local slots_str = string.format("%d/%d", storage.occupied, storage.total)
-            writeAt(x, row_y, padLeft(slots_str, layout.slots_width), COLOR_TEXT_DIM, COLOR_BG)
+            local slotsStr = string.format("%d/%d", storage.occupied, storage.total)
+            writeAt(x, rowY, padLeft(slotsStr, layout.slotsWidth), COLOR_TEXT_DIM, COLOR_BG)
             
             -- Register click zone for this row (store storage name)
-            registerClickZone(1, row_y, displayWidth, row_y, "select_storage", storage.name)
+            registerClickZone(1, rowY, displayWidth, rowY, "select_storage", storage.name)
             
-            row_y = row_y + 1
+            rowY = rowY + 1
         end
     end
     
     -- Summary line above footer
-    local summary_y = displayHeight - 1
+    local summaryY = displayHeight - 1
     local summary = string.format("Total: %d/%d slots, %d items",
         computedData.totalOccupied,
         computedData.totalSlots,
         computedData.totalItemCount)
-    fillLine(summary_y, COLOR_BG)
-    centerText(summary_y, summary, COLOR_TEXT_DIM, COLOR_BG)
+    fillLine(summaryY, COLOR_BG)
+    centerText(summaryY, summary, COLOR_TEXT_DIM, COLOR_BG)
     
     -- Footer with pagination
     drawFooter()
@@ -605,15 +600,15 @@ local function calculateStorageDetailLayout()
     local layout = {}
     
     -- Fixed widths
-    layout.name_width = 12      -- "vault_XXX" + padding
-    layout.pct_width = 4        -- "100%"
-    layout.slots_width = 11     -- "1620/1620" + padding
-    layout.items_width = 7      -- "999999"
+    layout.nameWidth = 12      -- "vault_XXX" + padding
+    layout.pctWidth = 4        -- "100%"
+    layout.slotsWidth = 11     -- "1620/1620" + padding
+    layout.itemsWidth = 7      -- "999999"
     layout.spacing = 3          -- spaces between columns
     
     -- Progress bar gets remaining space
-    local remaining = displayWidth - layout.name_width - layout.pct_width - layout.slots_width - layout.items_width - layout.spacing
-    layout.progress_width = math.max(6, remaining)
+    local remaining = displayWidth - layout.nameWidth - layout.pctWidth - layout.slotsWidth - layout.itemsWidth - layout.spacing
+    layout.progressWidth = math.max(6, remaining)
     
     return layout
 end
@@ -654,79 +649,79 @@ local function drawStorageDetail()
     centerText(1, title, COLOR_HEADER_FG, COLOR_HEADER_BG)
     
     -- Back button on top left
-    local back_text = "< Back"
-    writeAt(2, 1, back_text, COLOR_BUTTON_FG, COLOR_BUTTON_BG)
-    registerClickZone(1, 1, #back_text + 2, 1, "back", nil)
+    local backText = "< Back"
+    writeAt(2, 1, backText, COLOR_BUTTON_FG, COLOR_BUTTON_BG)
+    registerClickZone(1, 1, #backText + 2, 1, "back", nil)
     
     local layout = calculateStorageDetailLayout()
     
     -- Column headers
     local columns = {
-        { name = "Vault", width = layout.name_width },
-        { name = "Fill", width = layout.progress_width },
-        { name = "Pct", width = layout.pct_width },
-        { name = "Slots", width = layout.slots_width },
-        { name = "Items", width = layout.items_width },
+        { name = "Vault", width = layout.nameWidth },
+        { name = "Fill", width = layout.progressWidth },
+        { name = "Pct", width = layout.pctWidth },
+        { name = "Slots", width = layout.slotsWidth },
+        { name = "Items", width = layout.itemsWidth },
     }
     drawColumnHeaders(2, columns)
     
     -- Calculate pagination
-    local num_vaults = #storage.vaults
-    totalPages = math.max(1, math.ceil(num_vaults / itemsPerPage))
+    local numVaults = #storage.vaults
+    totalPages = math.max(1, math.ceil(numVaults / itemsPerPage))
     
     if currentPage > totalPages then
         currentPage = totalPages
     end
     
-    local start_idx = (currentPage - 1) * itemsPerPage + 1
-    local end_idx = math.min(start_idx + itemsPerPage - 1, num_vaults)
+    local startIdx = (currentPage - 1) * itemsPerPage + 1
+    local endIdx = math.min(startIdx + itemsPerPage - 1, numVaults)
     
     -- Draw vault rows
-    local row_y = 4
-    for i = start_idx, end_idx do
+    local rowY = 4
+    for i = startIdx, endIdx do
         local vault = storage.vaults[i]
         if vault then
             local x = 1
             
             -- Name column
-            local name = truncateString(vault.name, layout.name_width)
-            writeAt(x, row_y, padRight(name, layout.name_width), COLOR_TEXT, COLOR_BG)
-            x = x + layout.name_width + 1
+            local name = truncateString(vault.name, layout.nameWidth)
+            writeAt(x, rowY, padRight(name, layout.nameWidth), COLOR_TEXT, COLOR_BG)
+            x = x + layout.nameWidth + 1
             
             -- Progress bar
-            local progress_color = getProgressColor(vault.percentage)
-            drawProgressBar(x, row_y, layout.progress_width, vault.percentage, progress_color)
-            x = x + layout.progress_width + 1
+            local progressColor = getProgressColor(vault.percentage)
+            drawProgressBar(x, rowY, layout.progressWidth, vault.percentage, progressColor)
+            x = x + layout.progressWidth + 1
             
             -- Percentage
-            local pct_str = string.format("%3d%%", vault.percentage)
-            writeAt(x, row_y, pct_str, getProgressColor(vault.percentage), COLOR_BG)
-            x = x + layout.pct_width + 1
+            local pctStr = string.format("%3d%%", vault.percentage)
+            writeAt(x, rowY, pctStr, getProgressColor(vault.percentage), COLOR_BG)
+            x = x + layout.pctWidth + 1
             
             -- Slots
-            local slots_str = string.format("%d/%d", vault.occupied, vault.total)
-            writeAt(x, row_y, padLeft(slots_str, layout.slots_width), COLOR_TEXT_DIM, COLOR_BG)
-            x = x + layout.slots_width + 1
+            local slotsStr = string.format("%d/%d", vault.occupied, vault.total)
+            writeAt(x, rowY, padLeft(slotsStr, layout.slotsWidth), COLOR_TEXT_DIM, COLOR_BG)
+            x = x + layout.slotsWidth + 1
             
             -- Items
-            local items_str = tostring(vault.itemCount)
-            writeAt(x, row_y, padLeft(items_str, layout.items_width), COLOR_TEXT_DIM, COLOR_BG)
+            local itemsStr = tostring(vault.itemCount)
+            writeAt(x, rowY, padLeft(itemsStr, layout.itemsWidth), COLOR_TEXT_DIM, COLOR_BG)
             
-            row_y = row_y + 1
+            rowY = rowY + 1
         end
     end
     
     -- Draw empty state if no vaults
-    if num_vaults == 0 then
+    if numVaults == 0 then
         centerText(math.floor(displayHeight / 2), "No vaults found", COLOR_TEXT_DIM, COLOR_BG)
     end
     
     -- Summary line above footer
-    local summary_y = displayHeight - 1
+    local summaryY = displayHeight - 1
     local summary = string.format("Total: %d/%d slots, %d items",
         storage.occupied, storage.total, storage.itemCount)
-    fillLine(summary_y, COLOR_BG)
-    centerText(summary_y, summary, COLOR_TEXT_DIM, COLOR_BG)
+    fillLine(summaryY, COLOR_BG)
+    centerText(summaryY, summary, COLOR_TEXT_DIM, COLOR_BG)
     
     -- Footer with pagination
     drawFooter()
@@ -787,7 +782,7 @@ local function render()
 end
 
 local function uiTask(task)
-    local refresh_timer = os.startTimer(cfg.uiRefreshInterval)
+    local refreshTimer = os.startTimer(cfg.uiRefreshInterval)
     
     -- Initial render
     markDirty()
@@ -797,19 +792,19 @@ local function uiTask(task)
         
         local event, p1, p2, p3 = os.pullEvent()
         
-        if event == "timer" and p1 == refresh_timer then
+        if event == "timer" and p1 == refreshTimer then
             markDirty()
-            refresh_timer = os.startTimer(cfg.uiRefreshInterval)
+            refreshTimer = os.startTimer(cfg.uiRefreshInterval)
         elseif event == "monitor_touch" or event == "mouse_click" then
             -- p1 = button (for mouse_click) or side (for monitor_touch)
             -- p2 = x, p3 = y
-            local click_x, click_y
+            local clickX, clickY
             if event == "monitor_touch" then
-                click_x, click_y = p2, p3
+                clickX, clickY = p2, p3
             else
-                click_x, click_y = p2, p3
+                clickX, clickY = p2, p3
             end
-            handleClick(click_x, click_y)
+            handleClick(clickX, clickY)
         elseif event == "key" then
             local key = p1
             if key == keys.left or key == keys.pageUp then
