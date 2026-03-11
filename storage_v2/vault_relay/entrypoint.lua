@@ -34,10 +34,11 @@ local max_count_cache = {}
 -- ################################################### --
 
 local function warmingUpCache()
+    log:info("warming up cache...")
     local items = inv.list()
     for slot, item in pairs(items) do
         if not max_count_cache[item.name] then
-            --log:debug("item limit cache miss")
+            log:debug("item limit cache miss")
             local detail = inv.getItemDetail(slot)
             max_count_cache[item.name] = detail.maxCount
         end
