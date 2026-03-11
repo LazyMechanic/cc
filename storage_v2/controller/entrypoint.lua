@@ -199,7 +199,6 @@ local function computeDisplayData()
                 storageName = "UNKNOWN"
             end
 
-
             local storage = storageMap[storageName]
             if not storage then
                 storage = {
@@ -887,9 +886,16 @@ local function onVaultConnect(sender, name)
     if vault.id then stock.vaultIds[vault.id] = nil end
     stock.vaultIds[sender] = name
 
-    vault.id = sender
-    vault.name = name
-    vault.connected = true
+    local newVault = {
+        connected = true,
+        id = sender,
+        name = name,
+        total = 0,
+        occupied = 0,
+        itemCount = 0,
+        items = {},
+    }
+    stock.vaults[name] = newVault
 end
 
 ---@param sender ComputerId
@@ -1064,11 +1070,18 @@ local function onBufferConnect(sender, name)
         log:warn(("buffer %s already connected as %d"):format(stock.buffer.name, stock.buffer.id))
     end
 
-    stock.buffer.id = sender
-    stock.buffer.name = name
-    stock.buffer.connected = true
+    local newBuffer = {
+        connected = true,
+        id = sender,
+        name = name,
+        inv = stock.buffer.inv,
+        total = 0,
+        occupied = 0,
+        itemCount = 0,
+        items = {}
+    }
 
-    return true, {}
+    stock.buffer = newBuffer
 end
 
 local function bufferPingTask()
