@@ -87,19 +87,6 @@ local function getCurrentState()
     }
 end
 
-local function scheduleDelayedAnnounce()
-    lastPulseTimerTask = loop:addTimer(cfg.lastSignalDelay, function()
-        lastPulseTimerTask = nil
-        local controllerId = controllerId
-        if controllerId then
-            log:info("announcing state to controller...")
-            local state = getCurrentState()
-            api.client.announceState(controllerId, state.items, state.totalSlots)
-        end
-        return 0
-    end)
-end
-
 local function announceState()
     local controllerId = controllerId
     if controllerId then
@@ -107,6 +94,14 @@ local function announceState()
         local state = getCurrentState()
         api.client.announceState(controllerId, state.items, state.totalSlots)
     end
+end
+
+local function scheduleDelayedAnnounce()
+    lastPulseTimerTask = loop:addTimer(cfg.lastSignalDelay, function()
+        lastPulseTimerTask = nil
+        announceState()
+        return 0
+    end)
 end
 
 local function onPing(sender)
@@ -145,6 +140,7 @@ local function connectTask(task)
                 :next(function(_)
                     controllerId = id
                     log:info("connected to controller")
+                    announceState()
                 end)
                 :catch(function(err)
                     log:error(("failed to connect to controller: %s"):format(err))
