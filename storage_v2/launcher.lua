@@ -80,7 +80,7 @@ local function installFirmware()
     end
 
     print("Update manifest...")
-    downloadFile(manifest.origin, ("%s/firmware.json"):format(FIRMWARE_DIR))
+    downloadFile(manifest.origin, "firmware.json")
 
     local manifest = readManifest()
 
