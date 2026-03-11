@@ -14,7 +14,7 @@ local log = nil
 ---@field controllerHostname string
 ---@field inventorySide string
 ---@field redstoneSide string | string[]
----@field maxPulseCount number
+---@field maxSignalCount number
 ---@field lastSignalDelay number
 ---@field pingInterval number
 ---@field pongTimeout number
@@ -130,7 +130,7 @@ local function onRedstone()
     log:info("redstone signal received")
     pulse_count = pulse_count + 1
 
-    if pulse_count >= cfg.maxPulseCount then
+    if pulse_count >= cfg.maxSignalCount then
         cancelDelayedAnnounce()
         resetPulseCount()
         announceState()
