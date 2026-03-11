@@ -92,6 +92,7 @@ local function scheduleDelayedAnnounce()
         lastPulseTimerTask = nil
         local controllerId = controllerId
         if controllerId then
+            log:info("announcing state to controller...")
             local state = getCurrentState()
             api.client.announceState(controllerId, state.items, state.totalSlots)
         end
@@ -102,6 +103,7 @@ end
 local function announceState()
     local controllerId = controllerId
     if controllerId then
+        log:info("announcing state to controller...")
         local state = getCurrentState()
         api.client.announceState(controllerId, state.items, state.totalSlots)
     end
@@ -118,7 +120,7 @@ end
 
 local function onRedstone()
     if not getRedstoneInput() then return end
-    log:info("redstone enabled")
+    log:info("redstone signal received")
     pulse_count = pulse_count + 1
 
     if pulse_count >= cfg.maxPulseCount then
@@ -163,6 +165,7 @@ end
 local function pingTask()
     if not controllerId then return nil end
 
+    log:debug("sendig ping to controller...")
     api.client.ping({ id = controllerId, timeout = cfg.pongTimeout })
         :next(function(_) 
             log:debug("received pong from controller")

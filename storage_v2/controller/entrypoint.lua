@@ -857,6 +857,9 @@ local function onVaultAnnounceState(sender, items, totalSlots)
     local vaultName = stock.vaultIds[sender]
     if not vaultName then return false, "Unregistered vault ID" end
     
+    log:info(("vault %s announced state"):format(vaultName))
+    log:debug(("vault %s state: %s"):format(vaultName, pp.render(pp.pretty({ items, totalSlots }))))
+    
     local vault = stock.vaults[vaultName]
     if not vault.connected then return false, "Received state from disconnected vault" end
 
@@ -877,6 +880,8 @@ local function onVaultConnect(sender, name)
         log:warn("Unknown vault tried to connect: " .. tostring(name))
         return nil, "Unknown vault"
     end
+    
+    log:info(("vault %s connected"):format(name))
 
     if vault.connected then
         log:warn(("vault %s already connected as %d"):format(vault.name, vault.id))
@@ -906,6 +911,7 @@ end
 local function vaultPingTask()
     for _, vault in pairs(stock.vaults) do
         if vault.connected then
+            log:debug(("sending ping to %s vault"):format(vault.name))
             vaultApi.server.ping({ id = vault.id, timeout = cfg.pongTimeout })
                 :next(function(_)
                     log:debug(("received pong from vault %s"):format(vault.name))
@@ -1047,6 +1053,9 @@ local function onBufferAnnounceState(sender, items, totalSlots)
     if not stock.buffer.connected then return nil, "Received state from disconnected buffer" end
     
     if sender ~= stock.buffer.id then return nil, "Unauthorized buffer sender" end
+
+    log:info("buffer announced state")
+    log:debug(("buffer state: %s"):format(pp.render(pp.pretty({ items, totalSlots }))))
 
     local state = readBufferState(items, totalSlots)
     stock.buffer.total = state.total
