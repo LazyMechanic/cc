@@ -858,7 +858,7 @@ local function onVaultAnnounceState(sender, items, totalSlots)
     if not vaultName then return false, "Unregistered vault ID" end
     
     log:info(("vault %s announced state"):format(vaultName))
-    log:debug(("vault %s state: %s"):format(vaultName, pp.render(pp.pretty({ items, totalSlots }))))
+    --log:debug(("vault %s state: %s"):format(vaultName, pp.render(pp.pretty({ items, totalSlots }))))
     
     local vault = stock.vaults[vaultName]
     if not vault.connected then return false, "Received state from disconnected vault" end
