@@ -198,7 +198,7 @@ end
 local function parseArgs()
     local options = {
         verbose = false,
-        logFile = "logs/entrypoint.log",
+        logFile = nil,
         config = "config.json",
     }
     
