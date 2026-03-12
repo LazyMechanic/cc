@@ -3,8 +3,7 @@ local pp = require("cc.pretty")
 local loop = require("taskmaster")()
 
 local common = require("common")
-local vaultApi = require("vault_relay_api")(loop)
-local bufApi = require("buffer_relay_api")(loop)
+local invApi = require("inv_relay_api")
 
 -- ###################################################
 -- Configuration
@@ -81,7 +80,7 @@ local COLOR_BUTTON_FG = colors.white
 ---@field total number
 ---@field occupied number
 ---@field itemCount number
----@field items table<number, Item>
+---@field items table<Slot, Item>
 ---@field pongMissingCounter number
 
 ---@class DisconnectedVault
@@ -96,7 +95,7 @@ local COLOR_BUTTON_FG = colors.white
 ---@field total number
 ---@field occupied number
 ---@field itemCount number
----@field items table<number, Item>
+---@field items table<Slot, Item>
 ---@field pongMissingCounter number
 
 ---@class DisconnectedBuffer
@@ -112,6 +111,8 @@ local log = nil
 
 ---@class Config
 ---@field hostname string
+---@field bufferRelayProtocol string
+---@field vaultRelayProtocol string
 ---@field uiRefreshInterval number
 ---@field monitorTextScale number
 ---@field initTimeout number
@@ -138,11 +139,13 @@ local stock = {
     buffer = nil,
 }
 
+local bufServer = nil
+local vaultServer = nil
+
 local bufferStateChangedQueue = loop:createQueue()
 
 local currentScreen = SCREEN_STORAGE_LIST
 local selectedStorageName = nil
-local pongMissingCounter = 0
 
 -- Display state
 local display = nil
@@ -850,7 +853,7 @@ local function readVaultState(items, totalSlots)
 end
 
 ---@param sender ComputerId
----@param items table<ComputerId, Item>
+---@param items table<Slot, Item>
 ---@param totalSlots number
 local function onVaultAnnounceState(sender, items, totalSlots)
     local vaultName = stock.vaultIds[sender]
@@ -912,13 +915,13 @@ local function vaultPingTask()
     for _, vault in pairs(stock.vaults) do
         if vault.connected then
             log:debug(("sending ping to %s vault"):format(vault.name))
-            vaultApi.server.ping({ id = vault.id, timeout = cfg.pongTimeout })
+            vaultServer.ping({ id = vault.id, timeout = cfg.pongTimeout })
                 :next(function(_)
                     log:debug(("received pong from vault %s"):format(vault.name))
                     stock.vaults[vault.name].pongMissingCounter = 0
                 end)
                 :catch(function(err)
-                    log:error(("failed to receive pong from vault: %s"):format(vault.name, err))
+                    log:error(("failed to receive pong from vault %s: %s"):format(vault.name, err))
                     vault.pongMissingCounter = vault.pongMissingCounter + 1
                     if vault.pongMissingCounter >= cfg.maxPongMissing then
                         -- Disable vault
@@ -1001,7 +1004,7 @@ local function itemsProcessingTask(task)
                     log:debug("storage", storage.name, "can fit", canFit, "items")
 
                     if canFit > 0 then
-                        local moved = stock.buffer.inv.peripheral.pushItems(storage.inv.name, slot)
+                        local moved = stock.buffer.inv.peripheral.pushItems(storage.inv.name, slot, canFit)
                         if moved ~= canFit then
                             log:warn("gate are full")
                             allItemsMoved = false
@@ -1051,7 +1054,7 @@ local function readBufferState(items, totalSlots)
 end
 
 ---@param sender ComputerId
----@param items table<ComputerId, Item>
+---@param items table<Slot, Item>
 ---@param totalSlots number
 local function onBufferAnnounceState(sender, items, totalSlots)
     if not stock.buffer.connected then return nil, "Received state from disconnected buffer" end
@@ -1104,7 +1107,7 @@ local function bufferPingTask()
         return nil
     end
 
-    bufApi.server.ping({ id = stock.buffer.id, timeout = cfg.pongTimeout })
+    bufServer.ping({ id = stock.buffer.id, timeout = cfg.pongTimeout })
         :next(function(_) 
             log:debug(("received pong from buffer %s"):format(stock.buffer.name))
             stock.buffer.pongMissingCounter = 0
@@ -1188,8 +1191,11 @@ local function init()
 
     initStock()
 
-    bufApi.server.host(cfg.hostname)
-    vaultApi.server.host(cfg.hostname)
+    bufServer = invApi.newServer(loop, cfg.bufferRelayProtocol)
+    vaultServer = invApi.newServer(loop, cfg.vaultRelayProtocol)
+
+    bufServer.host(cfg.hostname)
+    vaultServer.host(cfg.hostname)
     
     -- Show waiting screen until data arrives
     drawWaitingScreen()
@@ -1270,13 +1276,13 @@ local function main()
 
     init()
 
-    bufApi.server.onConnect(onBufferConnect)
-    bufApi.server.onPing(onBufferPing)
-    bufApi.server.onAnnounceState(onBufferAnnounceState)
+    bufServer.onConnect(onBufferConnect)
+    bufServer.onPing(onBufferPing)
+    bufServer.onAnnounceState(onBufferAnnounceState)
 
-    vaultApi.server.onConnect(onVaultConnect)
-    vaultApi.server.onPing(onVaultPing)
-    vaultApi.server.onAnnounceState(onVaultAnnounceState)
+    vaultServer.onConnect(onVaultConnect)
+    vaultServer.onPing(onVaultPing)
+    vaultServer.onAnnounceState(onVaultAnnounceState)
 
     loop:task(uiTask)
         :task(itemsProcessingTask)

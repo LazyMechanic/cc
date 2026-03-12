@@ -29,17 +29,10 @@ local function installController()
     shell.run("launcher.lua", "--install")
 end
 
-local function installVaultRelay()
+local function installInvRelay()
     downloadFile(ROOT_URL .. "/startup.lua", "startup.lua")
     downloadFile(ROOT_URL .. "/launcher.lua", "launcher.lua")
-    downloadFile(ROOT_URL .. "/vault_relay/firmware.json", "firmware.json")
-    shell.run("launcher.lua", "--install")
-end
-
-local function installBufferRelay()
-    downloadFile(ROOT_URL .. "/startup.lua", "startup.lua")
-    downloadFile(ROOT_URL .. "/launcher.lua", "launcher.lua")
-    downloadFile(ROOT_URL .. "/buffer_relay/firmware.json", "firmware.json")
+    downloadFile(ROOT_URL .. "/inv_relay/firmware.json", "firmware.json")
     shell.run("launcher.lua", "--install")
 end
 
@@ -48,10 +41,8 @@ local function main(args)
         printHelp()
     elseif args[1] == "--controller" then
         installController()
-    elseif args[1] == "--vault-relay" then
-        installVaultRelay()
-    elseif args[1] == "--buffer-relay" then
-        installBufferRelay()
+    elseif args[1] == "--inv-relay" then
+        installInvRelay()
     else
         error("It is not specified what to install")
     end

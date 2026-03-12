@@ -1,7 +1,7 @@
 local loop = require("taskmaster")()
 
 local common = require("common")
-local api = require("buffer_relay_api")(loop)
+local api = require("inv_relay_api")
 
 -- ################################################### --
 -- State
@@ -11,6 +11,7 @@ local log = nil
 
 ---@class Config
 ---@field hostname string
+---@field protocol string
 ---@field controllerHostname string
 ---@field inventorySide string
 ---@field redstoneSide string | string[]
@@ -30,19 +31,25 @@ local pulseCount = 0
 local inv = nil
 local maxCountCache = {}
 local pongMissingCounter = 0
+local apiClient = nil
 
 -- ################################################### --
 -- Main logic
 -- ################################################### --
 
+local function makeCacheKey(item)
+    return item.name .. ":" .. tostring(item.nbt or 0)
+end
+
 local function warmingUpCache()
     log:info("warming up cache...")
     local items = inv.list()
     for slot, item in pairs(items) do
-        if not maxCountCache[item.name] then
+        local cacheKey = makeCacheKey(item)
+        if not maxCountCache[cacheKey] then
             log:debug("item limit cache miss")
             local detail = inv.getItemDetail(slot)
-            maxCountCache[item.name] = detail.maxCount
+            maxCountCache[cacheKey] = detail.maxCount
         end
     end
 end
@@ -67,9 +74,9 @@ local function getRedstoneInput()
                 return true
             end
         end
-
-        return false
     end
+    
+    return false
 end
 
 local function resetPulseCount()
@@ -86,13 +93,14 @@ end
 local function getCurrentState()
     local items = inv.list()
     for slot, item in pairs(items) do
-        if not maxCountCache[item.name] then
+        local cacheKey = makeCacheKey(item)
+        if not maxCountCache[cacheKey] then
             --log:debug("item limit cache miss")
             local detail = inv.getItemDetail(slot)
-            maxCountCache[item.name] = detail.maxCount
+            maxCountCache[cacheKey] = detail.maxCount
         end
 
-        item.maxCount = maxCountCache[item.name]
+        item.maxCount = maxCountCache[cacheKey]
     end
 
     return {
@@ -106,7 +114,7 @@ local function announceState()
     if controllerId then
         log:info("announcing state to controller...")
         local state = getCurrentState()
-        api.client.announceState(controllerId, state.items, state.totalSlots)
+        apiClient.announceState(controllerId, state.items, state.totalSlots)
     end
 end
 
@@ -146,11 +154,11 @@ local function connectTask(task)
     while true do
         nextConnect()
 
-        local id = api.client.lookup(cfg.controllerHostname)
+        local id = apiClient.lookup(cfg.controllerHostname)
         if id then
             log:info(("controller hostname %s resolve to %d"):format(cfg.controllerHostname, id))
 
-            api.client.connect({ id = id, timeout = cfg.connectTimeout }, cfg.hostname)
+            apiClient.connect({ id = id, timeout = cfg.connectTimeout }, cfg.hostname)
                 :next(function(_)
                     controllerId = id
                     log:info("connected to controller")
@@ -164,6 +172,7 @@ local function connectTask(task)
                     end)
                 end)
         else
+            log:warn("controller lookup failed")
             loop:timer(cfg.reconnectInterval, function()
                 scheduleConnect()
                 return 0
@@ -175,8 +184,8 @@ end
 local function pingTask()
     if not controllerId then return nil end
 
-    log:debug("sendig ping to controller...")
-    api.client.ping({ id = controllerId, timeout = cfg.pongTimeout })
+    log:debug("sending ping to controller...")
+    apiClient.ping({ id = controllerId, timeout = cfg.pongTimeout })
         :next(function(_) 
             log:debug("received pong from controller")
             pongMissingCounter = 0
@@ -269,12 +278,14 @@ local function main()
     inv = initInventory()
     assert(inv, "inventory not found")
 
+    apiClient = api.newClient(loop, cfg.protocol)
+
     warmingUpCache()
 
     scheduleConnect()
 
-    api.client.onPing(onPing)
-    api.client.onGetState(onGetState)
+    apiClient.onPing(onPing)
+    apiClient.onGetState(onGetState)
 
     loop:eventListener("redstone", onRedstone)
         :timer(cfg.pingInterval, pingTask)

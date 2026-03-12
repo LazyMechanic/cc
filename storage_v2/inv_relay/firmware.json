@@ -1,5 +1,5 @@
 {
-    "origin": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/vault_relay/firmware.json",
+    "origin": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/inv_relay/firmware.json",
     "files": [
         {
             "path": "taskmaster.lua",
@@ -18,16 +18,16 @@
             "url": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/shared/rpc_api.lua"
         },
         {
-            "path": "vault_relay_api.lua",
-            "url": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/shared/vault_relay_api.lua"
+            "path": "inv_relay_api.lua",
+            "url": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/shared/inv_relay_api.lua"
         },
         {
             "path": "entrypoint.lua",
-            "url": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/vault_relay/entrypoint.lua"
+            "url": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/inv_relay_api/entrypoint.lua"
         },
         {
             "path": "example.config.json",
-            "url": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/vault_relay/example.config.json"
+            "url": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/inv_relay_api/example.config.json"
         }
     ]
 }

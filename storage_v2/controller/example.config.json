@@ -1,5 +1,7 @@
 {
     "hostname": "controller",
+    "bufferRelayProtocol": "storage_buffer_relay",
+    "vaultRelayProtocol": "storage_vault_relay",
     "uiRefreshInterval": 1,
     "monitorTextScale": 0.5,
     "initTimeout": 10,

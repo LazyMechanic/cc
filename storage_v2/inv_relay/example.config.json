@@ -1,5 +1,6 @@
 {
-    "hostname": "buffer_0",
+    "hostname": "inv_0",
+    "protocol": "protocol",
     "controllerHostname": "controller",
     "inventorySide": "bottom",
     "redstoneSide": [ "left", "right" ],
