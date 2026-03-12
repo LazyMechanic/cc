@@ -82,6 +82,7 @@ local COLOR_BUTTON_FG = colors.white
 ---@field occupied number
 ---@field itemCount number
 ---@field items table<number, Item>
+---@field pongMissingCounter number
 
 ---@class DisconnectedVault
 ---@field connected boolean Always false
@@ -96,6 +97,7 @@ local COLOR_BUTTON_FG = colors.white
 ---@field occupied number
 ---@field itemCount number
 ---@field items table<number, Item>
+---@field pongMissingCounter number
 
 ---@class DisconnectedBuffer
 ---@field connected boolean Always false
@@ -115,6 +117,7 @@ local log = nil
 ---@field initTimeout number
 ---@field pingInterval number
 ---@field pongTimeout number
+---@field maxPongMissing number
 ---@field requestStateInterval number
 ---@field bufferInventory string
 ---@field vaults table<VaultName, StorageName>
@@ -139,6 +142,7 @@ local bufferStateChangedQueue = loop:createQueue()
 
 local currentScreen = SCREEN_STORAGE_LIST
 local selectedStorageName = nil
+local pongMissingCounter = 0
 
 -- Display state
 local display = nil
@@ -894,6 +898,7 @@ local function onVaultConnect(sender, name)
         occupied = 0,
         itemCount = 0,
         items = {},
+        pongMissingCounter = 0,
     }
     stock.vaults[name] = newVault
 end
@@ -910,12 +915,16 @@ local function vaultPingTask()
             vaultApi.server.ping({ id = vault.id, timeout = cfg.pongTimeout })
                 :next(function(_)
                     log:debug(("received pong from vault %s"):format(vault.name))
+                    stock.vaults[vault.name].pongMissingCounter = 0
                 end)
                 :catch(function(err)
                     log:error(("failed to receive pong from vault: %s"):format(vault.name, err))
-                    -- Disable vault
-                    stock.vaults[vault.name].connected = false
-                    markDirty()
+                    vault.pongMissingCounter = vault.pongMissingCounter + 1
+                    if vault.pongMissingCounter >= cfg.maxPongMissing then
+                        -- Disable vault
+                        stock.vaults[vault.name].connected = false
+                        markDirty()
+                    end
                 end)
         end
     end
@@ -1082,7 +1091,8 @@ local function onBufferConnect(sender, name)
         total = 0,
         occupied = 0,
         itemCount = 0,
-        items = {}
+        items = {},
+        pongMissingCounter = 0,
     }
 
     stock.buffer = newBuffer
@@ -1097,12 +1107,16 @@ local function bufferPingTask()
     bufApi.server.ping({ id = stock.buffer.id, timeout = cfg.pongTimeout })
         :next(function(_) 
             log:debug(("received pong from buffer %s"):format(stock.buffer.name))
+            stock.buffer.pongMissingCounter = 0
         end)
         :catch(function(err) 
             log:error(("failed to receive pong from buffer %s: %s"):format(stock.buffer.name, err))
-            -- Disable buffer
-            stock.buffer.connected = false
-            markDirty()
+            stock.buffer.pongMissingCounter = stock.buffer.pongMissingCounter + 1
+            if stock.buffer.pongMissingCounter >= cfg.maxPongMissing then
+                -- Disable buffer
+                stock.buffer.connected = false
+                markDirty()
+            end
         end)
 
     return nil

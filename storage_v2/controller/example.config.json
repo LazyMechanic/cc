@@ -5,6 +5,7 @@
     "initTimeout": 10,
     "pingInterval": 5,
     "pongTimeout": 3,
+    "maxPongMissing": 3,
     "requestStateInterval": 5,
     "moveTimeout": 5,
     "bufferInventory": "create:item_vault_174",

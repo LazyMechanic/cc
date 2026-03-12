@@ -179,6 +179,7 @@ local function pingTask()
     api.client.ping({ id = controllerId, timeout = cfg.pongTimeout })
         :next(function(_) 
             log:debug("received pong from controller")
+            pongMissingCounter = 0
         end)
         :catch(function (err)
             log:error(("failed to receive pong from controller %s"):format(err))
