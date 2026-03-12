@@ -7,6 +7,7 @@
     "lastSignalDelay": 3,
     "pingInterval": 5,
     "pongTimeout": 3,
+    "maxPongMissing": 3,
     "reconnectInterval": 3,
     "connectTimeout": 1
 }

@@ -18,6 +18,7 @@ local log = nil
 ---@field lastSignalDelay number
 ---@field pingInterval number
 ---@field pongTimeout number
+---@field maxPongMissing number
 ---@field reconnectInterval number
 ---@field connectTimeout number
 local cfg = {}
@@ -25,9 +26,10 @@ local cfg = {}
 local controllerId = nil
 local connectQueue = loop:createQueue()
 local lastPulseTimerTask = nil
-local pulse_count = 0
+local pulseCount = 0
 local inv = nil
-local max_count_cache = {}
+local maxCountCache = {}
+local pongMissingCounter = 0
 
 -- ################################################### --
 -- Main logic
@@ -37,10 +39,10 @@ local function warmingUpCache()
     log:info("warming up cache...")
     local items = inv.list()
     for slot, item in pairs(items) do
-        if not max_count_cache[item.name] then
+        if not maxCountCache[item.name] then
             log:debug("item limit cache miss")
             local detail = inv.getItemDetail(slot)
-            max_count_cache[item.name] = detail.maxCount
+            maxCountCache[item.name] = detail.maxCount
         end
     end
 end
@@ -71,7 +73,7 @@ local function getRedstoneInput()
 end
 
 local function resetPulseCount()
-    pulse_count = 0
+    pulseCount = 0
 end
 
 local function cancelDelayedAnnounce()
@@ -84,13 +86,13 @@ end
 local function getCurrentState()
     local items = inv.list()
     for slot, item in pairs(items) do
-        if not max_count_cache[item.name] then
+        if not maxCountCache[item.name] then
             --log:debug("item limit cache miss")
             local detail = inv.getItemDetail(slot)
-            max_count_cache[item.name] = detail.maxCount
+            maxCountCache[item.name] = detail.maxCount
         end
 
-        item.maxCount = max_count_cache[item.name]
+        item.maxCount = maxCountCache[item.name]
     end
 
     return {
@@ -128,9 +130,9 @@ end
 local function onRedstone()
     if not getRedstoneInput() then return end
     log:info("redstone signal received")
-    pulse_count = pulse_count + 1
+    pulseCount = pulseCount + 1
 
-    if pulse_count >= cfg.maxSignalCount then
+    if pulseCount >= cfg.maxSignalCount then
         cancelDelayedAnnounce()
         resetPulseCount()
         announceState()
@@ -180,8 +182,12 @@ local function pingTask()
         end)
         :catch(function (err)
             log:error(("failed to receive pong from controller %s"):format(err))
-            controllerId = nil
-            scheduleConnect()
+            pongMissingCounter = pongMissingCounter + 1
+            if pongMissingCounter >= cfg.maxPongMissing then
+                log:warn("maximum number of missed pongs has been reached, reconnect")
+                controllerId = nil
+                scheduleConnect()
+            end
         end)
 
     return nil
