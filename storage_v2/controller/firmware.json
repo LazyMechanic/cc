@@ -18,12 +18,8 @@
             "url": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/shared/rpc_api.lua"
         },
         {
-            "path": "vault_relay_api.lua",
-            "url": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/shared/vault_relay_api.lua"
-        },
-        {
-            "path": "buffer_relay_api.lua",
-            "url": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/shared/buffer_relay_api.lua"
+            "path": "inv_relay_api.lua",
+            "url": "https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v2/shared/inv_relay_api.lua"
         },
         {
             "path": "entrypoint.lua",
