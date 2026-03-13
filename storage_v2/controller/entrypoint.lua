@@ -1027,6 +1027,7 @@ local function itemsProcessingTask(task)
             end
 
             if not allItemsMoved then
+                log:warn("not all items moved from buffer, scheduling new try")
                 -- After timer try to move rest items
                 loop:timer(3, function()
                     scheduleItemMoving()
