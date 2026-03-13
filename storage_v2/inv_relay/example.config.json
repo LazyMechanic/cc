@@ -4,7 +4,7 @@
     "controllerHostname": "controller",
     "inventorySide": "bottom",
     "redstoneSide": [ "left", "right" ],
-    "maxSignalCount": 5,
+    "maxSignalCount": 6,
     "lastSignalDelay": 3,
     "pingInterval": 5,
     "pongTimeout": 3,
