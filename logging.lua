@@ -1,10 +1,10 @@
-local common = {}
+local logger = {}
 
 -- ################################################### --
 -- Log Levels
 -- ################################################### --
 
-common.LogLevel = {
+logger.LogLevel = {
     DEBUG = 1,
     INFO = 2,
     WARN = 3,
@@ -33,7 +33,7 @@ local LEVEL_COLORS = {
 local LoggerRegistry = {
     _loggers = {},
     _config = {
-        level = common.LogLevel.INFO,
+        level = logger.LogLevel.INFO,
         console = true,
         timestamp = true,
         filename = nil,
@@ -52,7 +52,7 @@ local LoggerRegistry = {
 function LoggerRegistry.init(options)
     options = options or {}
     
-    LoggerRegistry._config.level = options.level or common.LogLevel.INFO
+    LoggerRegistry._config.level = options.level or logger.LogLevel.INFO
     LoggerRegistry._config.console = options.console ~= false
     LoggerRegistry._config.timestamp = options.timestamp ~= false
     LoggerRegistry._config.filename = options.filename
@@ -155,10 +155,10 @@ function Logger:_log(level, ...)
     end
 end
 
-function Logger:debug(...) self:_log(common.LogLevel.DEBUG, ...) end
-function Logger:info(...)  self:_log(common.LogLevel.INFO, ...)  end
-function Logger:warn(...)  self:_log(common.LogLevel.WARN, ...)  end
-function Logger:error(...) self:_log(common.LogLevel.ERROR, ...) end
+function Logger:debug(...) self:_log(logger.LogLevel.DEBUG, ...) end
+function Logger:info(...)  self:_log(logger.LogLevel.INFO, ...)  end
+function Logger:warn(...)  self:_log(logger.LogLevel.WARN, ...)  end
+function Logger:error(...) self:_log(logger.LogLevel.ERROR, ...) end
 
 -- ################################################### --
 -- Get Logger Function (Main API)
@@ -167,7 +167,7 @@ function Logger:error(...) self:_log(common.LogLevel.ERROR, ...) end
 --- Get a logger by name (creates if doesn't exist)
 --- @param name string - Logger name
 --- @return Logger
-function common.getLogger(name)
+function logger.getLogger(name)
     name = name or "root"
     
     if not LoggerRegistry._loggers[name] then
@@ -178,137 +178,9 @@ function common.getLogger(name)
 end
 
 -- Expose registry functions
-common.initLogging = LoggerRegistry.init
-common.shutdownLogging = LoggerRegistry.shutdown
-common.setLogLevel = LoggerRegistry.setLevel
-common.setLogConsole = LoggerRegistry.setConsole
+logger.initLogging = LoggerRegistry.init
+logger.shutdownLogging = LoggerRegistry.shutdown
+logger.setLogLevel = LoggerRegistry.setLevel
+logger.setLogConsole = LoggerRegistry.setConsole
 
--- ################################################### --
--- Schema validation
--- ################################################### --
-
---[[ Schema example:
-local userSchema = {
-    id = "string",
-    age = "number",
-    tags = {"array", "string"},
-    metadata = {"map", "string", "string"}, -- keys are strings, values are strings
-    owner = {
-        name = "string",
-        age = "number"
-    },
-    permissions = {"map", "string", {"array", "string"}} -- map values are arrays
-}
-
-local validPayload = {
-    id = "abc123",
-    age = 42,
-    tags = {"admin", "editor"},
-    metadata = {foo="bar", baz="qux"},
-    owner = {name="Alice", age=30},
-    permissions = {
-        files = {"read", "write"},
-        settings = {"read"}
-    }
-}
-
-local invalidPayload = {
-    id = "abc123",
-    age = "not a number", -- invalid type
-    tags = {"admin", "editor"},
-    metadata = {foo="bar"},
-    owner = {name="Alice", age=30},
-    permissions = {files = {"read"}}
-}
-
-print(validateSchema(validPayload, userSchema))   -- true
-print(validateSchema(invalidPayload, userSchema)) -- false
-]]
-function common.validateSchema(data, schema)
-    -- primitive schema (string type)
-    if type(schema) == "string" then
-        return type(data) == schema
-    end
-
-    -- schema must be a table now
-    if type(schema) ~= "table" then
-        return false
-    end
-
-    -- array schema: {"array", itemSchema}
-    if schema[1] == "array" then
-        if type(data) ~= "table" then
-            return false
-        end
-        local itemSchema = schema[2]
-        for i = 1, #data do
-            if not common.validateSchema(data[i], itemSchema) then
-                return false
-            end
-        end
-        return true
-    end
-
-    -- map schema: {"map", keySchema, valueSchema}
-    if schema[1] == "map" then
-        if type(data) ~= "table" then
-            return false
-        end
-        local keySchema = schema[2]
-        local valueSchema = schema[3]
-        for k, v in pairs(data) do
-            if not common.validateSchema(k, keySchema) then
-                return false
-            end
-            if not common.validateSchema(v, valueSchema) then
-                return false
-            end
-        end
-        return true
-    end
-
-    -- object schema (nested fields)
-    if type(data) ~= "table" then
-        return false
-    end
-    for field, fieldSchema in pairs(schema) do
-        if data[field] == nil then
-            return false
-        end
-        if not common.validateSchema(data[field], fieldSchema) then
-            return false
-        end
-    end
-
-    return true
-end
-
---- generate unique ID
----@return string ID
-function common.generateID()
-    local template ='xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
-    local ans = string.gsub(template, '[xy]', function (c)
-        local v = (c == 'x') and math.random(0, 0xf) or math.random(8, 0xb)
-        return string.format('%x', v)
-    end)
-    return ans
-end
-
---- open rednet on all sides
----@return table sides
-function common.openRednet()
-    local sides = {"top","bottom","left","right","front","back"}
-    local opened = {}
-    for _, side in ipairs(sides) do
-        if peripheral.getType(side) == "modem" then
-            if not rednet.isOpen(side) then
-                rednet.open(side)
-                table.insert(opened, side)
-            end
-        end
-    end
-
-    return opened
-end
-
-return common
+return logger
