@@ -837,8 +837,6 @@ local function stateUpdateTask()
                 stock.sumMetrics.total = stock.sumMetrics.total + storage.sumMetrics.total
                 stock.sumMetrics.occupied = stock.sumMetrics.occupied + storage.sumMetrics.occupied
                 stock.sumMetrics.itemCount = stock.sumMetrics.itemCount + storage.sumMetrics.itemCount
-
-                coroutine.yield()
             end
             stock.sumMetrics.percentage = calculatePercentage(stock.sumMetrics.occupied, stock.sumMetrics.total)
             log:info("stock state updated")
@@ -1157,7 +1155,6 @@ local function warmingUpCache()
                 local detail = vault.inv.peripheral.getItemDetail(slot)
                 local key = makeMaxCountCacheKey(item)
                 maxCountCache[key] = detail.maxCount
-                coroutine.yield()
             end
             log:debug(("caching done for %s"):format(vault.name))
             resolve()
@@ -1170,7 +1167,6 @@ local function warmingUpCache()
             local detail = stock.buffer.inv.peripheral.getItemDetail(slot)
             local key = makeMaxCountCacheKey(item)
             maxCountCache[key] = detail.maxCount
-            coroutine.yield()
         end
         log:debug("caching done for buffer")
         resolve()
