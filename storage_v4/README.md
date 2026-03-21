@@ -6,5 +6,5 @@ Call next commands in computer terminal
 
 Install controller firmware:
 ```
-wget run https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v3/install.lua
+wget run https://raw.githubusercontent.com/LazyMechanic/cc/master/storage_v4/install.lua
 ```

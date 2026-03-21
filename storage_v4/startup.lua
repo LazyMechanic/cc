@@ -3,6 +3,7 @@ local pp = require("cc.pretty")
 local loop = require("taskmaster")()
 
 local logging = require("logging")
+local Mutex = require("mutex")
 
 -- ###################################################
 -- Configuration
@@ -55,7 +56,8 @@ local log = nil
 ---@class VaultConfig
 ---@field name VaultName
 ---@field inventory string
----@field redstone string
+---@field redstoneIn string
+---@field redstoneOut string
 ---@field storage string
 
 ---@class StorageConfig
@@ -65,7 +67,8 @@ local log = nil
 ---@class Config
 ---@field uiRefreshInterval number
 ---@field monitorTextScale number
----@field checkBufferInterval number
+---@field updateInventoriesInterval number
+---@field moveItemsInterval number
 ---@field buffer BufferConfig
 ---@field vaults VaultConfig[]
 ---@field storages StorageConfig[]
@@ -76,12 +79,22 @@ local cfg = {}
 
 ---@alias Slot number
 
+---@alias PeripheralName string
+
 ---@class Item
 ---@field name ItemName
 ---@field count number
 ---@field nbt string|nil
 
----@alias PeripheralName string
+---@class InventoryMetrics
+---@field total number
+---@field occupied number
+---@field itemCount number
+---@field percentage number
+
+---@class InventoryCache
+---@field items table<Slot, Item>
+---@field metrics InventoryMetrics
 
 ---@class Redstone
 ---@field name PeripheralName
@@ -94,32 +107,61 @@ local cfg = {}
 ---@class Buffer
 ---@field inv Inventory
 ---@field red Redstone
-
----@class Storage
----@field name StorageName
----@field inv Inventory Gate inventory
+---@field invCache InventoryCache
 
 ---@class Vault
 ---@field name VaultName
----@field inv Inventory
 ---@field storage StorageName
----@field red Redstone
+---@field inv Inventory
+---@field redIn Redstone
+---@field redOut Redstone
+---@field invCache InventoryCache
+
+---@class Storage
+---@field name StorageName
+---@field gateInv Inventory
+---@field sumMetrics InventoryMetrics
 
 ---@class Stock
 ---@field buffer Buffer
 ---@field vaults table<VaultName, Vault>
 ---@field storages table<StorageName, Storage>
----@field vaultRedstones table<PeripheralName, VaultName>
----@field vaultsOrdering VaultName[]
+---@field sumMetrics InventoryMetrics
 local stock = {
     buffer = {
         inv = { name = "", peripheral = {} },
         red = { name = "", peripheral = {} },
+        invCache = {
+            items = {},
+            metrics = {
+                total = 0,
+                occupied = 0,
+                itemCount = 0,
+                percentage = 0,
+            },
+        },
     },
     vaults = {},
     storages = {},
-    vaultRedstones = {},
-    vaultsOrdering = {},
+    sumMetrics = {
+        total = 0,
+        occupied = 0,
+        itemCount = 0,
+        percentage = 0,
+    },
+}
+local stockMx = Mutex.new(loop)
+
+---@class Index
+---@field storagesOrdered StorageName[]
+---@field vaultsOrdered VaultName[]
+---@field storageToVaults table<StorageName, VaultName[]>
+---@field redstoneToVault table<PeripheralName, VaultName>
+local index = {
+    storagesOrdered = {},
+    vaultsOrdered = {},
+    storageToVaults = {},
+    redstoneToVault = {},
 }
 
 ---@alias MaxCountCache table<string, number>
@@ -144,45 +186,6 @@ local clickZones = {}
 
 local needsRedraw = false
 
-
----@class BufferView
----@field total number
----@field occupied number
----@field itemCount number
----@field percentage number
-
----@class VaultView
----@field name VaultName
----@field total number
----@field occupied number
----@field itemCount number
----@field percentage number
-
----@class StorageView
----@field name StorageName
----@field total number
----@field occupied number
----@field itemCount number
----@field percentage number
----@field vaultList VaultView[]
-
--- Cached computed data for display
----@class ComputedData
----@field buffer BufferView
----@field storageList StorageView[] sorted array of storage data
----@field totalSlots number
----@field totalOccupied number
----@field totalItemCount number
----@field totalPercentage number
-local computedData = {
-    buffer = { total = 0, occupied = 0, itemCount = 0, percentage = 0 },
-    storageList = {},
-    totalSlots = 0,
-    totalOccupied = 0,
-    totalItemCount = 0,
-    totalPercentage = 0,
-}
-
 ---@class DirtyInventories
 ---@field buffer boolean
 ---@field vaults table<VaultName, boolean>
@@ -197,110 +200,6 @@ local dirtyInventories = {
 
 local function calculatePercentage(part, total)
     return total > 0 and math.floor((part / total) * 100) or 0
-end
-
-local function computeDisplayData()
-    log:debug("compute display data...")
-    local dirtyBuffer = dirtyInventories.buffer
-    local dirtyVaults = dirtyInventories.vaults
-
-    dirtyInventories.buffer = false
-    dirtyInventories.vaults = {}
-
-    if dirtyBuffer then
-        log:debug("buffer marked dirty, compute data...")
-        computedData.buffer = {
-            total = stock.buffer.inv.peripheral.size(),
-            occupied = 0,
-            itemCount = 0,
-            percentage = 0,
-        }
-        for _, item in pairs(stock.buffer.inv.peripheral.list()) do
-            computedData.buffer.occupied = computedData.buffer.occupied + 1
-            computedData.buffer.itemCount = computedData.buffer.itemCount + item.count
-        end
-        computedData.buffer.percentage = calculatePercentage(computedData.buffer.occupied, computedData.buffer.total)
-    end
-
-    local vaultTasks = {}
-    local updatedVaults = {}
-    for _, vaultName in ipairs(stock.vaultsOrdering) do
-        if dirtyVaults[vaultName] then
-            local task = function()
-                log:debug(("vault %s marked dirty, compute data..."):format(vaultName))
-                local vault = stock.vaults[vaultName]
-
-                local vaultView = {
-                    name = vault.name,
-                    total = vault.inv.peripheral.size(),
-                    occupied = 0,
-                    itemCount = 0,
-                    percentage = 0,
-                }
-                for _, item in pairs(vault.inv.peripheral.list()) do
-                    vaultView.occupied = vaultView.occupied + 1
-                    vaultView.itemCount = vaultView.itemCount + item.count
-                end
-
-                vaultView.percentage = calculatePercentage(vaultView.occupied, vaultView.total)
-                updatedVaults[vault.name] = vaultView
-            end
-            table.insert(vaultTasks, task)
-        end
-    end
-
-    if #vaultTasks > 0 then
-        parallel.waitForAll(table.unpack(vaultTasks))
-    end
-
-    if #vaultTasks == 0 then
-        log:debug("compute display data done!")
-        return
-    end
-
-    local storageTasks = {}
-    for storageIdx, storage in ipairs(computedData.storageList) do
-        log:debug(("compute storage %s data..."):format(storage.name))
-        local currentStorageIdx = storageIdx
-        local currentStorage = storage
-        local task = function()
-            computedData.storageList[currentStorageIdx].total = 0
-            computedData.storageList[currentStorageIdx].occupied = 0
-            computedData.storageList[currentStorageIdx].itemCount = 0
-            computedData.storageList[currentStorageIdx].percentage = 0
-
-            for vaultIdx, vault in ipairs(currentStorage.vaultList) do
-                if updatedVaults[vault.name] then
-                    currentStorage.vaultList[vaultIdx] = updatedVaults[vault.name]
-                end
-
-                computedData.storageList[currentStorageIdx].total = computedData.storageList[currentStorageIdx].total + currentStorage.vaultList[vaultIdx].total
-                computedData.storageList[currentStorageIdx].occupied = computedData.storageList[currentStorageIdx].occupied + currentStorage.vaultList[vaultIdx].occupied
-                computedData.storageList[currentStorageIdx].itemCount = computedData.storageList[currentStorageIdx].itemCount + currentStorage.vaultList[vaultIdx].itemCount
-            end
-
-            computedData.storageList[currentStorageIdx].percentage = calculatePercentage(computedData.storageList[currentStorageIdx].occupied, computedData.storageList[currentStorageIdx].total)
-        end
-
-        table.insert(storageTasks, task)
-    end
-
-    if #storageTasks > 0 then
-        parallel.waitForAll(table.unpack(storageTasks))
-    end
-
-    log:debug("compute total data...")
-    computedData.totalSlots = 0
-    computedData.totalOccupied = 0
-    computedData.totalItemCount = 0
-    for _, storage in ipairs(computedData.storageList) do
-            computedData.totalSlots = computedData.totalSlots + storage.total
-            computedData.totalOccupied = computedData.totalOccupied + storage.occupied
-            computedData.totalItemCount = computedData.totalItemCount + storage.itemCount
-    end
-    computedData.percentage = calculatePercentage(computedData.totalOccupied, computedData.totalSlots)
-
-    log:debug("display data computed!")
 end
 
 -- ################################################### --
@@ -483,14 +382,14 @@ end
 -- Waiting Screen
 -- ################################################### --
 
-local function drawWaitingScreen()
+local function drawLoadingScreen()
     clearScreen()
     
     -- Header
     drawHeader("Storage Monitor")
     
     -- Waiting message
-    centerText(math.floor(displayHeight / 2), "Waiting for data...", COLOR_TEXT_DIM, COLOR_BG)
+    centerText(math.floor(displayHeight / 2), "Loading...", COLOR_TEXT_DIM, COLOR_BG)
 end
 
 -- ################################################### --
@@ -509,7 +408,7 @@ local function calculateStorageListLayout()
     layout.nameWidth = 12     -- "storage_XX" + padding
     layout.pctWidth = 4       -- "100%"
     layout.slotsWidth = 11    -- "9720/9720" + padding
-    layout.spacing = 3         -- spaces between columns
+    layout.spacing = 3        -- spaces between columns
     
     -- Progress bar gets remaining space
     local remaining = displayWidth - layout.nameWidth - layout.pctWidth - layout.slotsWidth - layout.spacing
@@ -519,18 +418,15 @@ local function calculateStorageListLayout()
 end
 
 local function drawStorageList()
-    -- Compute fresh data
-    computeDisplayData()
-
     clearScreen()
     
     -- Header with total stats
-    local totalPct = computedData.totalPercentage
+    local totalPct = stock.sumMetrics.percentage
     local headerTitle = string.format("Storage Monitor [%d%%]", totalPct)
     drawHeader(headerTitle)
     
     -- Buffer percentage on top right
-    local bufferPct = computedData.buffer.percentage
+    local bufferPct = stock.buffer.invCache.metrics.percentage
     local bufferText = string.format("Buffer: %d%%", bufferPct)
     local bufferColor = bufferPct > 0 and getProgressColor(bufferPct) or COLOR_HEADER_FG
     writeAt(displayWidth - #bufferText, 1, bufferText, bufferColor, COLOR_HEADER_BG)
@@ -547,7 +443,7 @@ local function drawStorageList()
     drawColumnHeaders(2, columns)
     
     -- Calculate pagination
-    local numStorages = #computedData.storageList
+    local numStorages = #index.storagesOrdered
     totalPages = math.max(1, math.ceil(numStorages / itemsPerPage))
     
     if currentPage > totalPages then
@@ -560,8 +456,10 @@ local function drawStorageList()
     -- Draw storage rows
     local rowY = 4
     for i = startIdx, endIdx do
-        local storage = computedData.storageList[i]
-        if storage then
+        local storageName = index.storagesOrdered[i]
+        if storageName then
+            local storage = stock.storages[storageName]
+
             local x = 1
             
             -- Name column
@@ -570,17 +468,17 @@ local function drawStorageList()
             x = x + layout.nameWidth + 1
             
             -- Progress bar
-            local progressColor = getProgressColor(storage.percentage)
-            drawProgressBar(x, rowY, layout.progressWidth, storage.percentage, progressColor)
+            local progressColor = getProgressColor(storage.sumMetrics.percentage)
+            drawProgressBar(x, rowY, layout.progressWidth, storage.sumMetrics.percentage, progressColor)
             x = x + layout.progressWidth + 1
             
             -- Percentage
-            local pctStr = string.format("%3d%%", storage.percentage)
-            writeAt(x, rowY, pctStr, getProgressColor(storage.percentage), COLOR_BG)
+            local pctStr = string.format("%3d%%", storage.sumMetrics.percentage)
+            writeAt(x, rowY, pctStr, getProgressColor(storage.sumMetrics.percentage), COLOR_BG)
             x = x + layout.pctWidth + 1
             
             -- Slots
-            local slotsStr = string.format("%d/%d", storage.occupied, storage.total)
+            local slotsStr = string.format("%d/%d", storage.sumMetrics.occupied, storage.sumMetrics.total)
             writeAt(x, rowY, padLeft(slotsStr, layout.slotsWidth), COLOR_TEXT_DIM, COLOR_BG)
             
             -- Register click zone for this row (store storage name)
@@ -593,9 +491,9 @@ local function drawStorageList()
     -- Summary line above footer
     local summaryY = displayHeight - 1
     local summary = string.format("Total: %d/%d slots, %d items",
-        computedData.totalOccupied,
-        computedData.totalSlots,
-        computedData.totalItemCount)
+        stock.sumMetrics.occupied,
+        stock.sumMetrics.total,
+        stock.sumMetrics.itemCount)
     fillLine(summaryY, COLOR_BG)
     centerText(summaryY, summary, COLOR_TEXT_DIM, COLOR_BG)
     
@@ -619,7 +517,7 @@ local function calculateStorageDetailLayout()
     layout.pctWidth = 4        -- "100%"
     layout.slotsWidth = 11     -- "1620/1620" + padding
     layout.itemsWidth = 7      -- "999999"
-    layout.spacing = 3          -- spaces between columns
+    layout.spacing = 3         -- spaces between columns
     
     -- Progress bar gets remaining space
     local remaining = displayWidth - layout.nameWidth - layout.pctWidth - layout.slotsWidth - layout.itemsWidth - layout.spacing
@@ -628,23 +526,11 @@ local function calculateStorageDetailLayout()
     return layout
 end
 
-local function findStorageByName(name)
-    for _, storage in ipairs(computedData.storageList) do
-        if storage.name == name then
-            return storage
-        end
-    end
-    return nil
-end
-
 local function drawStorageDetail()
-    -- Compute fresh data
-    computeDisplayData()
-
     clearScreen()
     
     -- Get selected storage data
-    local storage = findStorageByName(selectedStorageName)
+    local storage = stock.storages[selectedStorageName]
     if not storage then
         fillLine(1, COLOR_HEADER_BG)
         centerText(1, "Storage Details", COLOR_HEADER_FG, COLOR_HEADER_BG)
@@ -660,7 +546,7 @@ local function drawStorageDetail()
     -- Header with storage name and fill percentage
     fillLine(1, COLOR_HEADER_BG)
     
-    local title = string.format("%s [%d%%]", storage.name, storage.percentage)
+    local title = string.format("%s [%d%%]", storage.name, storage.sumMetrics.percentage)
     centerText(1, title, COLOR_HEADER_FG, COLOR_HEADER_BG)
     
     -- Back button on top left
@@ -681,7 +567,8 @@ local function drawStorageDetail()
     drawColumnHeaders(2, columns)
     
     -- Calculate pagination
-    local numVaults = #storage.vaultList
+    local storageVaults = index.storageToVaults[storage.name]
+    local numVaults = #storageVaults
     totalPages = math.max(1, math.ceil(numVaults / itemsPerPage))
     
     if currentPage > totalPages then
@@ -694,8 +581,9 @@ local function drawStorageDetail()
     -- Draw vault rows
     local rowY = 4
     for i = startIdx, endIdx do
-        local vault = storage.vaultList[i]
-        if vault then
+        local vaultName = storageVaults[i]
+        if vaultName then
+            local vault = stock.vaults[vaultName]
             local x = 1
             
             -- Name column
@@ -704,22 +592,22 @@ local function drawStorageDetail()
             x = x + layout.nameWidth + 1
             
             -- Progress bar
-            local progressColor = getProgressColor(vault.percentage)
-            drawProgressBar(x, rowY, layout.progressWidth, vault.percentage, progressColor)
+            local progressColor = getProgressColor(vault.invCache.metrics.percentage)
+            drawProgressBar(x, rowY, layout.progressWidth, vault.invCache.metrics.percentage, progressColor)
             x = x + layout.progressWidth + 1
             
             -- Percentage
-            local pctStr = string.format("%3d%%", vault.percentage)
-            writeAt(x, rowY, pctStr, getProgressColor(vault.percentage), COLOR_BG)
+            local pctStr = string.format("%3d%%", vault.invCache.metrics.percentage)
+            writeAt(x, rowY, pctStr, getProgressColor(vault.invCache.metrics.percentage), COLOR_BG)
             x = x + layout.pctWidth + 1
             
             -- Slots
-            local slotsStr = string.format("%d/%d", vault.occupied, vault.total)
+            local slotsStr = string.format("%d/%d", vault.invCache.metrics.occupied, vault.invCache.metrics.total)
             writeAt(x, rowY, padLeft(slotsStr, layout.slotsWidth), COLOR_TEXT_DIM, COLOR_BG)
             x = x + layout.slotsWidth + 1
             
             -- Items
-            local itemsStr = tostring(vault.itemCount)
+            local itemsStr = tostring(vault.invCache.metrics.itemCount)
             writeAt(x, rowY, padLeft(itemsStr, layout.itemsWidth), COLOR_TEXT_DIM, COLOR_BG)
             
             rowY = rowY + 1
@@ -734,7 +622,7 @@ local function drawStorageDetail()
     -- Summary line above footer
     local summaryY = displayHeight - 1
     local summary = string.format("Total: %d/%d slots, %d items",
-        storage.occupied, storage.total, storage.itemCount)
+        storage.sumMetrics.occupied, storage.sumMetrics.total, storage.sumMetrics.itemCount)
     fillLine(summaryY, COLOR_BG)
     centerText(summaryY, summary, COLOR_TEXT_DIM, COLOR_BG)
     
@@ -843,15 +731,120 @@ end
 -- Storage Management
 -- ################################################### --
 
----@param red Redstone
----@return boolean
-local function getRedstoneInput(red)
-    for _, side in ipairs(ALL_SIDES) do
-        if red.peripheral.getInput(side) then
-            return true
-        end
+---@class ScanInventoryResult
+---@field items table<Slot, Item>
+---@field total number
+---@field occupied number
+---@field itemCount number
+---@field percentage number
+
+---@param inv Inventory
+---@return ScanInventoryResult
+local function scanInventory(inv)
+    log:debug(("scanning inventory %s..."):format(inv.name))
+    local items = inv.peripheral.list()
+    local total = inv.peripheral.size()
+    local occupied = 0
+    local itemCount = 0
+    for _, item in pairs(items) do
+        occupied = occupied + 1
+        itemCount = itemCount + item.count
     end
-    return false
+    local percentage = calculatePercentage(occupied, total)
+    log:debug("scanned")
+    return {
+        items = items,
+        total = total,
+        occupied = occupied,
+        itemCount = itemCount,
+        percentage = percentage,
+    }
+end
+
+local function stateUpdateTask()
+    stockMx:lock()
+
+    local dirtyBuffer = dirtyInventories.buffer
+    local dirtyVaults = dirtyInventories.vaults
+
+    dirtyInventories.buffer = false
+    dirtyInventories.vaults = {}
+
+    if not dirtyBuffer
+        and not next(dirtyVaults)
+    then
+        stockMx:unlock()
+        return
+    end
+
+    log:debug(("vaults to update: %s"):format(pp.render(pp.pretty(dirtyVaults))))
+    log:debug(("buffer update: %s"):format(tostring(dirtyBuffer)))
+
+    local promises = {}
+
+    if dirtyBuffer then
+        local p = loop.Promise.new(function(resolve, _)
+            local state = scanInventory(stock.buffer.inv)
+            stock.buffer.invCache.items = state.items
+            stock.buffer.invCache.metrics.total = state.total
+            stock.buffer.invCache.metrics.occupied = state.occupied
+            stock.buffer.invCache.metrics.itemCount = state.itemCount
+            stock.buffer.invCache.metrics.percentage = state.percentage
+            resolve()
+        end)
+        table.insert(promises, p)
+    end
+
+    for vaultName, _ in pairs(dirtyVaults) do
+        local vault = stock.vaults[vaultName]
+        local p = loop.Promise.new(function(resolve, _)
+            local state = scanInventory(vault.inv)
+            vault.invCache.items = state.items
+            vault.invCache.metrics.total = state.total
+            vault.invCache.metrics.occupied = state.occupied
+            vault.invCache.metrics.itemCount = state.itemCount
+            vault.invCache.metrics.percentage = state.percentage
+            resolve()
+        end)
+        table.insert(promises, p)
+    end
+
+    if #promises == 0 then
+        stockMx:unlock()
+        return
+    end
+
+    log:info("start to update stock state")
+
+    loop.Promise.all(promises)
+        :next(function(_, _)
+            stock.sumMetrics.total = 0
+            stock.sumMetrics.occupied = 0
+            stock.sumMetrics.itemCount = 0
+            for _, storage in pairs(stock.storages) do
+                log:debug(("update storage %s"):format(storage.name))
+                storage.sumMetrics.total = 0
+                storage.sumMetrics.occupied = 0
+                storage.sumMetrics.itemCount = 0
+                for _, vaultName in ipairs(index.storageToVaults[storage.name]) do
+                    local vault = stock.vaults[vaultName]
+                    storage.sumMetrics.total = storage.sumMetrics.total + vault.invCache.metrics.total
+                    storage.sumMetrics.occupied = storage.sumMetrics.occupied + vault.invCache.metrics.occupied
+                    storage.sumMetrics.itemCount = storage.sumMetrics.itemCount + vault.invCache.metrics.itemCount
+                end
+                storage.sumMetrics.percentage = calculatePercentage(storage.sumMetrics.occupied, storage.sumMetrics.total)
+
+                stock.sumMetrics.total = stock.sumMetrics.total + storage.sumMetrics.total
+                stock.sumMetrics.occupied = stock.sumMetrics.occupied + storage.sumMetrics.occupied
+                stock.sumMetrics.itemCount = stock.sumMetrics.itemCount + storage.sumMetrics.itemCount
+
+                coroutine.yield()
+            end
+            stock.sumMetrics.percentage = calculatePercentage(stock.sumMetrics.occupied, stock.sumMetrics.total)
+            log:info("stock state updated")
+
+            stockMx:unlock()
+        end)
 end
 
 ---@param item Item
@@ -866,67 +859,81 @@ local function getMaxCount(inv, slot, item)
     local cacheKey = makeMaxCountCacheKey(item)
     if not maxCountCache[cacheKey] then
         log:debug("item limit cache miss")
-        local detail = inv.peripheral.getItemDetail(slot)
-        maxCountCache[cacheKey] = detail.maxCount
+        local ok, detailResult = pcall(inv.peripheral.getItemDetail, slot)
+        -- Pessimistic value
+        local maxCount = 1
+        if not ok then
+            log:error(("failed to get item detail: %s"):format(tostring(detailResult)))
+        elseif detailResult then
+            maxCount = detailResult.maxCount
+        end
+        maxCountCache[cacheKey] = maxCount
     end
 
     return maxCountCache[cacheKey]
 end
 
 local function moveBufferItems()
-    local bufItems = stock.buffer.inv.peripheral.list()
+    stockMx:lock()
 
+    local bufItems = stock.buffer.invCache.items
     if not next(bufItems) then
-        log:debug("no items in buffer")
+        stockMx:unlock()
         return
     end
 
-    local vaults = {}
-    log:debug("start prepare vaults...")
-    for _, vaultName in ipairs(stock.vaultsOrdering) do
-        local vault = stock.vaults[vaultName]
-        local items = vault.inv.peripheral.list()
-        local occupied = 0
-        for _, _ in pairs(items) do occupied = occupied + 1 end
-        table.insert(vaults, {
-            name = vault.name,
-            storage = vault.storage,
-            inv = vault.inv,
-            items = items,
-            total = vault.inv.peripheral.size(),
-            occupied = occupied,
-        })
-    end
-    log:debug("vaults prepared!")
+    log:info("start move items from buffer")
 
     local tasks = {}
     for bufSlot, bufItem in pairs(bufItems) do
         local t = function()
             local bufItemMaxCount = getMaxCount(stock.buffer.inv, bufSlot, bufItem)
-            for _, vault in ipairs(vaults) do
+            for _, vaultName in ipairs(index.vaultsOrdered) do
+                local vault = stock.vaults[vaultName]
                 -- There is a free slot
-                if vault.occupied < vault.total then
-                    local moved = stock.buffer.inv.peripheral.pushItems(stock.storages[vault.storage].inv.name, bufSlot)
-                    log:debug(("%s x%d -> %s (%s)"):format(bufItem.name, moved, vault.storage, vault.name))
-                    bufItem.count = bufItem.count - moved
-                    -- We don't know which slot will when item will arrives to vault 
+                if vault.invCache.metrics.occupied < vault.invCache.metrics.total then
+                    -- Try to move item from buffer inventory to gate
+                    local ok, movedResult = pcall(stock.buffer.inv.peripheral.pushItems, stock.storages[vault.storage].gateInv.name, bufSlot)
+                    if not ok then
+                        log:error(("failed to push items: %s"):format(tostring(movedResult)))
+                    elseif movedResult then
+                        log:debug(("%s x%d -> %s (%s)"):format(bufItem.name, movedResult, vault.storage, vault.name))
+                        bufItem.count = bufItem.count - movedResult
+                        -- We don't know which slot will when item will arrives to vault 
+                    end
                 else
-                    for _, vaultItem in pairs(vault.items) do
+                    for _, vaultItem in pairs(vault.invCache.items) do
                         local isSameItem = vaultItem.name == bufItem.name
                             and vaultItem.nbt == bufItem.nbt
                             and vaultItem.count < bufItemMaxCount
                         if isSameItem then
                             local canFit = bufItemMaxCount - vaultItem.count
-                            local moved = stock.buffer.inv.peripheral.pushItems(stock.storages[vault.storage].inv.name, bufSlot, canFit)
-                            log:debug(("%s x%d -> %s (%s)"):format(bufItem.name, moved, vault.storage, vault.name))
-                            bufItem.count = bufItem.count - moved
-                            vaultItem.count = vaultItem.count + moved
+
+                            -- Try to move item from buffer inventory to gateLog
+                            local ok, movedResult = pcall(stock.buffer.inv.peripheral.pushItems, stock.storages[vault.storage].gateInv.name, bufSlot, canFit)
+                            if not ok then
+                                log:error(("failed to push items: %s"):format(tostring(movedResult)))
+                            elseif movedResult then
+                                log:debug(("%s x%d -> %s (%s)"):format(bufItem.name, movedResult, vault.storage, vault.name))
+                                bufItem.count = bufItem.count - movedResult
+                                vaultItem.count = vaultItem.count + movedResult
+
+                                -- If item full processed
+                                if bufItem.count <= 0 then
+                                    log:info(("moving done for %s"):format(bufItem.name))
+                                    stock.buffer.invCache.items[bufSlot] = nil
+                                    markDirty({ buffer = true })
+                                    return
+                                end
+                            end
                         end
                     end
                 end
 
+                -- If item full processed
                 if bufItem.count <= 0 then
                     log:info(("moving done for %s"):format(bufItem.name))
+                    stock.buffer.invCache.items[bufSlot] = nil
                     markDirty({ buffer = true })
                     return
                 end
@@ -939,12 +946,13 @@ local function moveBufferItems()
 
     parallel.waitForAll(table.unpack(tasks))
     log:info("all items moved from buffer to storages")
+    stockMx:unlock()
 end
 
 local function onRedstoneEvent(_event, src)
-    if stock.vaultRedstones[src] then
-        markDirty({ vault = stock.vaultRedstones[src] })
-        log:debug(("vault %s redstone signal received"):format(stock.vaultRedstones[src]))
+    if index.redstoneToVault[src] then
+        markDirty({ vault = index.redstoneToVault[src] })
+        log:debug(("vault %s redstone signal received"):format(index.redstoneToVault[src]))
     elseif stock.buffer.red.name == src then
         markDirty({ buffer = true })
         log:debug("buffer redstone signal received")
@@ -993,23 +1001,55 @@ local function setupDisplay()
     clearScreen()
 end
 
+local function initIndex()
+    for _, vault in ipairs(cfg.vaults) do
+        table.insert(index.vaultsOrdered, vault.name)
+
+        if not index.storageToVaults[vault.storage] then
+            index.storageToVaults[vault.storage] = {}
+        end
+        table.insert(index.storageToVaults[vault.storage], vault.name)
+
+        index.redstoneToVault[vault.redstoneIn] = vault.name
+        index.redstoneToVault[vault.redstoneOut] = vault.name
+    end
+
+    for _, storage in ipairs(cfg.storages) do
+        table.insert(index.storagesOrdered, storage.name)
+    end
+end
+
 local function initBuffer()
     log:info("init buffer...")
-    local inv = peripheral.wrap(cfg.buffer.inventory)
-    assert(inv, ("failed to initialize buffer inventory %s"):format(cfg.buffer.inventory))
+    local invPer = peripheral.wrap(cfg.buffer.inventory)
+    assert(invPer, ("failed to initialize buffer inventory %s"):format(cfg.buffer.inventory))
+    local inv = {
+        name = cfg.buffer.inventory,
+        peripheral = invPer,
+    }
 
-    local redstone = peripheral.wrap(cfg.buffer.redstone)
-    assert(redstone, ("failed to initialize buffer redstone %s"):format(cfg.buffer.redstone))
+    local redPer = peripheral.wrap(cfg.buffer.redstone)
+    assert(redPer, ("failed to initialize buffer redstone %s"):format(cfg.buffer.redstone))
+    local red = {
+        name = cfg.buffer.redstone,
+        peripheral = redPer
+    }
+
+    local invState = scanInventory(inv)
+    local invCache = {
+        items = invState.items,
+        metrics = {
+            total = invState.total,
+            occupied = invState.occupied,
+            itemCount = invState.itemCount,
+            percentage = invState.percentage,
+        },
+    }
 
     stock.buffer = {
-        inv = {
-            name = cfg.buffer.inventory,
-            peripheral = inv,
-        },
-        red = {
-            name = cfg.buffer.redstone,
-            peripheral = redstone,
-        },
+        inv = inv,
+        red = red,
+        invCache = invCache,
     }
     log:info("buffer initialized!")
 end
@@ -1017,26 +1057,46 @@ end
 local function initVaults()
     log:info("init vaults...")
     for _, vault in ipairs(cfg.vaults) do
-        local inv = peripheral.wrap(vault.inventory)
-        assert(inv, ("failed to initialize vault %s inventory %s"):format(vault.name, vault.inventory))
+        local invPer = peripheral.wrap(vault.inventory)
+        assert(invPer, ("failed to initialize vault %s inventory %s"):format(vault.name, vault.inventory))
+        local inv = {
+            name = vault.inventory,
+            peripheral = invPer,
+        }
 
-        local redstone = peripheral.wrap(vault.redstoneIn)
-        assert(redstone, ("failed to initialize vault %s redstone %s"):format(vault.name, vault.redstoneIn))
+        local invState = scanInventory(inv)
+        local invCache = {
+            items = invState.items,
+            metrics = {
+                total = invState.total,
+                occupied = invState.occupied,
+                itemCount = invState.itemCount,
+                percentage = invState.percentage,
+            },
+        }
+
+        local redInPer = peripheral.wrap(vault.redstoneIn)
+        assert(redInPer, ("failed to initialize vault %s redstone %s"):format(vault.name, vault.redstoneIn))
+        local redIn = {
+            name = vault.redstoneIn,
+            peripheral = redInPer,
+        }
+        
+        local redOutPer = peripheral.wrap(vault.redstoneOut)
+        assert(redOutPer, ("failed to initialize vault %s redstone %s"):format(vault.name, vault.redstoneOut))
+        local redOut = {
+            name = vault.redstoneOut,
+            peripheral = redOutPer,
+        }
 
         stock.vaults[vault.name] = {
             name = vault.name,
-            inv = {
-                name = vault.inventory,
-                peripheral = inv,
-            },
             storage = vault.storage,
-            red = {
-                name = vault.redstoneIn,
-                peripheral = redstone,
-            },
+            inv = inv,
+            redIn = redIn,
+            redOut = redOut,
+            invCache = invCache,
         }
-        stock.vaultRedstones[vault.redstoneIn] = vault.name
-        table.insert(stock.vaultsOrdering, vault.name)
     end
     log:info("vaults initialized!")
 end
@@ -1044,15 +1104,31 @@ end
 local function initStorages()
     log:info("init storages...")
     for _, storage in ipairs(cfg.storages) do
-        local inv = peripheral.wrap(storage.inventory)
-        assert(inv, ("failed to initialize storage %s inventory %s"):format(storage.name, storage.inventory))
+        local invPer = peripheral.wrap(storage.inventory)
+        assert(invPer, ("failed to initialize storage %s inventory %s"):format(storage.name, storage.inventory))
+        local inv = {
+            name = storage.inventory,
+            peripheral = invPer,
+        }
+
+        local sumMetrics = {
+            total = 0,
+            occupied = 0,
+            itemCount = 0,
+            percentage = 0,
+        }
+        for _, vaultName in ipairs(index.storageToVaults[storage.name]) do
+            local vault = stock.vaults[vaultName]
+            sumMetrics.total = sumMetrics.total + vault.invCache.metrics.total
+            sumMetrics.occupied = sumMetrics.occupied + vault.invCache.metrics.occupied
+            sumMetrics.itemCount = sumMetrics.itemCount + vault.invCache.metrics.itemCount
+        end
+        sumMetrics.percentage = calculatePercentage(sumMetrics.occupied, sumMetrics.total)
 
         stock.storages[storage.name] = {
             name = storage.name,
-            inv = {
-                name = storage.inventory,
-                peripheral = inv,
-            }
+            gateInv = inv,
+            sumMetrics = sumMetrics,
         }
     end
     log:info("storages initialized!")
@@ -1062,101 +1138,13 @@ local function initStock()
     initBuffer()
     initVaults()
     initStorages()
-end
 
-local function initUi()
-    log:info("initialize UI...")
-
-    needsRedraw = true
-    dirtyInventories.buffer = true
-    for name, _ in pairs(stock.vaults) do
-        dirtyInventories.vaults[name] = true
+    for _, storage in pairs(stock.storages) do
+        stock.sumMetrics.total = stock.sumMetrics.total + storage.sumMetrics.total
+        stock.sumMetrics.occupied = stock.sumMetrics.occupied + storage.sumMetrics.occupied
+        stock.sumMetrics.itemCount = stock.sumMetrics.itemCount + storage.sumMetrics.itemCount
     end
-
-    -- Scan vaults
-
-    for _, vaultName in ipairs(stock.vaultsOrdering) do
-        local vault = stock.vaults[vaultName]
-        local inv = vault.inv.peripheral
-
-        local total = inv.size()
-        local occupied = 0
-        local itemCount = 0
-
-        for _, item in pairs(inv.list()) do
-            occupied = occupied + 1
-            itemCount = itemCount + item.count
-        end
-
-        local vaultView = {
-            name = vault.name,
-            total = total,
-            occupied = occupied,
-            itemCount = itemCount,
-            percentage = calculatePercentage(occupied, total),
-        }
-
-        if #computedData.storageList == 0 
-            or computedData.storageList[#computedData.storageList].name ~= vault.storage
-        then
-            local storageView = {
-                name = vault.storage,
-                total = 0,
-                occupied = 0,
-                itemCount = 0,
-                percentage = 0,
-                vaultList = {},
-            }
-            table.insert(computedData.storageList, storageView)
-        end
-
-        
-        table.insert(computedData.storageList[#computedData.storageList].vaultList, vaultView)
-
-        computedData.storageList[#computedData.storageList].total = computedData.storageList[#computedData.storageList].total + total
-        computedData.storageList[#computedData.storageList].occupied = computedData.storageList[#computedData.storageList].occupied + occupied
-        computedData.storageList[#computedData.storageList].itemCount = computedData.storageList[#computedData.storageList].itemCount + itemCount
-    end
-
-    -- Finalize storage percentages
-
-    computedData.totalSlots = 0
-    computedData.totalOccupied = 0
-    computedData.totalItemCount = 0
-
-    for _, storage in ipairs(computedData.storageList) do
-        storage.percentage = calculatePercentage(storage.occupied, storage.total)
-
-        computedData.totalSlots = computedData.totalSlots + storage.total
-        computedData.totalOccupied = computedData.totalOccupied + storage.occupied
-        computedData.totalItemCount = computedData.totalItemCount + storage.itemCount
-    end
-
-    computedData.totalPercentage = calculatePercentage(
-        computedData.totalOccupied,
-        computedData.totalSlots
-    )
-
-    -- Buffer initial scan (so header is correct immediately)
-
-    local bufInv = stock.buffer.inv.peripheral
-    local bufTotal = bufInv.size()
-    local bufOccupied = 0
-    local bufItemCount = 0
-
-    for _, item in pairs(bufInv.list()) do
-        bufOccupied = bufOccupied + 1
-        bufItemCount = bufItemCount + item.count
-    end
-
-    computedData.buffer = {
-        total = bufTotal,
-        occupied = bufOccupied,
-        itemCount = bufItemCount,
-        percentage = calculatePercentage(bufOccupied, bufTotal),
-    }
-
-    log:info("ui initialized")
+    stock.sumMetrics.percentage = calculatePercentage(stock.sumMetrics.occupied, stock.sumMetrics.total)
 end
 
 local function warmingUpCache()
@@ -1171,9 +1159,9 @@ local function warmingUpCache()
                 maxCountCache[key] = detail.maxCount
                 coroutine.yield()
             end
+            log:debug(("caching done for %s"):format(vault.name))
             resolve()
         end)
-        :next(function() log:debug(("caching done for %s"):format(vault.name)) end)
         table.insert(tasks, p)
     end
     local p = loop.Promise.new(function(resolve, _)
@@ -1184,9 +1172,9 @@ local function warmingUpCache()
             maxCountCache[key] = detail.maxCount
             coroutine.yield()
         end
+        log:debug("caching done for buffer")
         resolve()
     end)
-    :next(function() log:debug("caching done for buffer") end)
     table.insert(tasks, p)
 
     loop.Promise.all(tasks):next(function() log:info("cache warmedup!") end)
@@ -1195,18 +1183,16 @@ end
 local function init()
     -- Setup display
     setupDisplay()
+    drawLoadingScreen()
 
     log:debug("dumb wait...")
     sleep(5)
     log:debug("done!")
 
+    initIndex()
     initStock()
-    initUi()
 
     warmingUpCache()
-    
-    -- Show waiting screen until data arrives
-    -- drawWaitingScreen()
     
     log:info("waiting for storage data...")
 end
@@ -1286,7 +1272,8 @@ local function main()
 
     loop:task(uiTask)
         :eventListener("redstone", onRedstoneEvent)
-        :timer(cfg.checkBufferInterval, moveBufferItems)
+        :timer(cfg.updateInventoriesInterval, stateUpdateTask)
+        :timer(cfg.moveItemsInterval, moveBufferItems)
         :run()
 end
 
