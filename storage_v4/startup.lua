@@ -69,6 +69,7 @@ local log = nil
 ---@field monitorTextScale number
 ---@field updateInventoriesInterval number
 ---@field moveItemsInterval number
+---@field useCreateStock boolean
 ---@field buffer BufferConfig
 ---@field vaults VaultConfig[]
 ---@field storages StorageConfig[]
@@ -213,7 +214,9 @@ local function markDirty(target)
 
     if target.buffer then
         dirtyInventories.buffer = true
-    elseif target.vault then
+    end
+    
+    if target.vault then
         dirtyInventories.vaults[target.vault] = true
     end
 end
@@ -888,55 +891,81 @@ local function moveBufferItems()
             local bufItemMaxCount = getMaxCount(stock.buffer.inv, bufSlot, bufItem)
             for _, vaultName in ipairs(index.vaultsOrdered) do
                 local vault = stock.vaults[vaultName]
-                -- There is a free slot
-                if vault.invCache.metrics.occupied < vault.invCache.metrics.total then
-                    -- Try to move item from buffer inventory to gate
-                    local ok, movedResult = pcall(stock.buffer.inv.peripheral.pushItems, stock.storages[vault.storage].gateInv.name, bufSlot)
-                    if not ok then
-                        log:error(("failed to push items: %s"):format(tostring(movedResult)))
-                    elseif movedResult then
-                        log:debug(("%s x%d -> %s (%s)"):format(bufItem.name, movedResult, vault.storage, vault.name))
-                        bufItem.count = bufItem.count - movedResult
-                        -- We don't know which slot will when item will arrives to vault 
-                    end
-                else
-                    for _, vaultItem in pairs(vault.invCache.items) do
-                        local isSameItem = vaultItem.name == bufItem.name
-                            and vaultItem.nbt == bufItem.nbt
-                            and vaultItem.count < bufItemMaxCount
-                        if isSameItem then
-                            local canFit = bufItemMaxCount - vaultItem.count
 
-                            -- Try to move item from buffer inventory to gateLog
-                            local ok, movedResult = pcall(stock.buffer.inv.peripheral.pushItems, stock.storages[vault.storage].gateInv.name, bufSlot, canFit)
-                            if not ok then
-                                log:error(("failed to push items: %s"):format(tostring(movedResult)))
-                            elseif movedResult then
-                                log:debug(("%s x%d -> %s (%s)"):format(bufItem.name, movedResult, vault.storage, vault.name))
-                                bufItem.count = bufItem.count - movedResult
-                                vaultItem.count = vaultItem.count + movedResult
+                -- Use stock system from create mod
+                if cfg.useCreateStock then
+                    -- There is a free slot
+                    if vault.invCache.metrics.occupied < vault.invCache.metrics.total then
+                        -- Try to move item from buffer inventory to gate
+                        local ok, movedResult = pcall(stock.buffer.inv.peripheral.pushItems, stock.storages[vault.storage].gateInv.name, bufSlot)
+                        if not ok then
+                            log:error(("failed to push items: %s"):format(tostring(movedResult)))
+                        elseif movedResult then
+                            log:debug(("%s x%d -> %s (%s)"):format(bufItem.name, movedResult, vault.storage, vault.name))
+                            bufItem.count = bufItem.count - movedResult
+                            -- We don't know which slot will when item will arrives to vault 
+                        end
+                    else
+                        for _, vaultItem in pairs(vault.invCache.items) do
+                            local isSameItem = vaultItem.name == bufItem.name
+                                and vaultItem.nbt == bufItem.nbt
+                                and vaultItem.count < bufItemMaxCount
+                            if isSameItem then
+                                local canFit = bufItemMaxCount - vaultItem.count
 
-                                -- If item full processed
-                                if bufItem.count <= 0 then
-                                    log:info(("moving done for %s"):format(bufItem.name))
-                                    stock.buffer.invCache.items[bufSlot] = nil
-                                    markDirty({ buffer = true })
-                                    return
+                                -- Try to move item from buffer inventory to gateLog
+                                local ok, movedResult = pcall(stock.buffer.inv.peripheral.pushItems, stock.storages[vault.storage].gateInv.name, bufSlot, canFit)
+                                if not ok then
+                                    log:error(("failed to push items: %s"):format(tostring(movedResult)))
+                                elseif movedResult then
+                                    log:debug(("%s x%d -> %s (%s)"):format(bufItem.name, movedResult, vault.storage, vault.name))
+                                    bufItem.count = bufItem.count - movedResult
+                                    vaultItem.count = vaultItem.count + movedResult
+
+                                    -- If item full processed
+                                    if bufItem.count <= 0 then
+                                        log:info(("moving done for %s"):format(bufItem.name))
+                                        stock.buffer.invCache.items[bufSlot] = nil
+                                        markDirty({ buffer = true })
+                                        return
+                                    end
                                 end
                             end
                         end
                     end
-                end
 
-                -- If item full processed
-                if bufItem.count <= 0 then
-                    log:info(("moving done for %s"):format(bufItem.name))
-                    stock.buffer.invCache.items[bufSlot] = nil
-                    markDirty({ buffer = true })
-                    return
-                end
+                    -- If item full processed
+                    if bufItem.count <= 0 then
+                        log:info(("moving done for %s"):format(bufItem.name))
+                        stock.buffer.invCache.items[bufSlot] = nil
+                        markDirty({ buffer = true })
+                        return
+                    end
 
-                coroutine.yield()
+                    coroutine.yield()
+
+                -- Use cc cable as inventory transport
+                else
+                    local ok, movedResult = pcall(stock.buffer.inv.peripheral.pushItems, vault.inv.name, bufSlot)
+                    if not ok then
+                        log:error(("failed to push items: %s"):format(tostring(movedResult)))
+                    elseif movedResult then
+                        if movedResult > 0 then
+                            log:info(("moved %s x%d -> %s (%s)"):format(bufItem.name, movedResult, vault.storage, vault.name))
+                            bufItem.count = bufItem.count - movedResult
+                            markDirty({ vault = vault.name, buffer = true })
+                        else
+                            log:debug(("vault %s can't fit %s"):format(vault.name, bufItem.name))
+                        end
+                    end
+
+                    -- If item full processed
+                    if bufItem.count <= 0 then
+                        log:info(("moving done for %s"):format(bufItem.name))
+                        stock.buffer.invCache.items[bufSlot] = nil
+                        return
+                    end
+                end
             end
         end
         table.insert(tasks, t)
