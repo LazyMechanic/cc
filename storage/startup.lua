@@ -114,13 +114,13 @@ local cfg = {}
 ---@field name VaultName
 ---@field storage StorageName
 ---@field inv Inventory
----@field redIn Redstone
+---@field redIn Redstone | nil
 ---@field redOut Redstone
 ---@field invCache InventoryCache
 
 ---@class Storage
 ---@field name StorageName
----@field gateInv Inventory
+---@field gateInv Inventory | nil
 ---@field sumMetrics InventoryMetrics
 
 ---@class Stock
@@ -1037,7 +1037,7 @@ local function initIndex()
         end
         table.insert(index.storageToVaults[vault.storage], vault.name)
 
-        index.redstoneToVault[vault.redstoneIn] = vault.name
+        if vault.redstoneIn then index.redstoneToVault[vault.redstoneIn] = vault.name end
         index.redstoneToVault[vault.redstoneOut] = vault.name
     end
 
@@ -1102,12 +1102,15 @@ local function initVaults()
             },
         }
 
-        local redInPer = peripheral.wrap(vault.redstoneIn)
-        assert(redInPer, ("failed to initialize vault %s redstone %s"):format(vault.name, vault.redstoneIn))
-        local redIn = {
-            name = vault.redstoneIn,
-            peripheral = redInPer,
-        }
+        local redIn = nil
+        if cfg.useCreateStock then
+            local redInPer = peripheral.wrap(vault.redstoneIn)
+            assert(redInPer, ("failed to initialize vault %s redstone %s"):format(vault.name, vault.redstoneIn))
+            redIn = {
+                name = vault.redstoneIn,
+                peripheral = redInPer,
+            }
+        end
         
         local redOutPer = peripheral.wrap(vault.redstoneOut)
         assert(redOutPer, ("failed to initialize vault %s redstone %s"):format(vault.name, vault.redstoneOut))
@@ -1131,12 +1134,15 @@ end
 local function initStorages()
     log:info("init storages...")
     for _, storage in ipairs(cfg.storages) do
-        local invPer = peripheral.wrap(storage.inventory)
-        assert(invPer, ("failed to initialize storage %s inventory %s"):format(storage.name, storage.inventory))
-        local inv = {
-            name = storage.inventory,
-            peripheral = invPer,
-        }
+        local gateInv = nil
+        if cfg.useCreateStock then
+            local gateInvPer = peripheral.wrap(storage.inventory)
+            assert(gateInvPer, ("failed to initialize storage %s inventory %s"):format(storage.name, storage.inventory))
+            gateInv = {
+                name = storage.inventory,
+                peripheral = gateInvPer,
+            }
+        end
 
         local sumMetrics = {
             total = 0,
@@ -1154,7 +1160,7 @@ local function initStorages()
 
         stock.storages[storage.name] = {
             name = storage.name,
-            gateInv = inv,
+            gateInv = gateInv,
             sumMetrics = sumMetrics,
         }
     end
@@ -1210,16 +1216,14 @@ local function init()
     setupDisplay()
     drawLoadingScreen()
 
-    log:debug("dumb wait...")
+    log:info("waiting for all chunks to load...")
     sleep(5)
-    log:debug("done!")
+    log:info("done!")
 
     initIndex()
     initStock()
 
     warmingUpCache()
-    
-    log:info("waiting for storage data...")
 end
 
 -- ################################################### --
